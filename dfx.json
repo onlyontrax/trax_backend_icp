@@ -1,0 +1,28 @@
+{
+  "canisters": {
+    "dyn_canisters_backend": {
+      "main": "src/dyn_canisters_backend/main.mo",
+      "type": "motoko"
+    },
+    "dyn_canisters_frontend": {
+      "dependencies": [
+        "dyn_canisters_backend"
+      ],
+      "frontend": {
+        "entrypoint": "src/dyn_canisters_frontend/src/index.html"
+      },
+      "source": [
+        "src/dyn_canisters_frontend/assets",
+        "dist/dyn_canisters_frontend/"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "version": 1
+}
