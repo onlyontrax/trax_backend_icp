@@ -1,9 +1,10 @@
 {
   "canisters": {
     "dyn_canisters_backend": {
-      "main": "src/dyn_canisters_backend/main.mo",
+      "main": "src/dyn_canisters_backend/manager/manager.mo",
       "type": "motoko"
     },
+    
     "dyn_canisters_frontend": {
       "dependencies": [
         "dyn_canisters_backend"

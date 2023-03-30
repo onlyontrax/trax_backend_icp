@@ -40,5 +40,8 @@
     "last 2 firefox version",
     "last 2 safari version",
     "last 2 edge version"
-  ]
+  ],
+  "dependencies": {
+    "@psychedelic/plug-connect": "^0.2.0"
+  }
 }
