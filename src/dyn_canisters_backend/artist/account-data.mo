@@ -3,7 +3,7 @@ import Cycles "mo:base/ExperimentalCycles";
 import Principal "mo:base/Principal";
 import Error "mo:base/Error";
 import Nat "mo:base/Nat";
-import Map "mo:base/HashMap";
+import Map  "mo:stable-hash-map/Map";
 import Debug "mo:base/Debug";
 import Text "mo:base/Text";
 import T          "types";
@@ -27,16 +27,18 @@ module {
 
     type ArtistAccountData = T.ArtistAccountData;
     type UserId = T.UserId;
+    let { ihash; nhash; thash; phash; calcHash } = Map;
+
 
     public class ArtistData() {
-        private var artistData = Map.HashMap<UserId, ArtistAccountData>(1, Principal.equal, Principal.hash);
+        private var artistData = Map.new<UserId, ArtistAccountData>(phash);
 
         public func put(caller: UserId, data: ArtistAccountData) {
-          artistData.put(caller, data);
+          let a = Map.put(artistData, phash, caller, data);
         };
 
         public func get(caller: UserId) : ?ArtistAccountData {
-          return artistData.get(caller);
+          return Map.get(artistData, phash, caller);
         };
 
         public func del(caller : UserId) : ?ArtistAccountData {
@@ -44,7 +46,7 @@ module {
 
           switch (entry) {
             case (?entry) {
-              artistData.delete(caller);
+              Map.delete(artistData, phash, caller);
             };
             case (null) {};
           };
@@ -53,22 +55,12 @@ module {
         };
 
         public func update(caller: UserId, info: ArtistAccountData) : async (){
-            var update = artistData.replace(caller, info);
+            var update = Map.replace(artistData, phash, caller, info);
         };
 
         public func entries() : Iter.Iter<(UserId, ArtistAccountData)> {
-          return artistData.entries();
+          return Map.entries(artistData);
         };
-
-        public func preupgrade() : Map.HashMap<UserId, ArtistAccountData> {
-          return artistData;
-        };
-
-        public func postupgrade(stableData : [(UserId, ArtistAccountData)]) {
-          artistData := Map.fromIter<UserId, ArtistAccountData>(stableData.vals(), 10, Principal.equal, Principal.hash);
-        };
-
-
 
     }
 }

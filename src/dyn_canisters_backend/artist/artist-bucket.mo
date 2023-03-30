@@ -43,7 +43,7 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
   
   var version: Nat = 1;
 
-  var artistToProfileInfoMap = Map.HashMap<UserId, ArtistAccountData>(1, Principal.equal, Principal.hash);
+  // var artistToProfileInfoMap = Map.HashMap<UserId, ArtistAccountData>(1, Principal.equal, Principal.hash);
 
   stable var initialised: Bool = false;
 

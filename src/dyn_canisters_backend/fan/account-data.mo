@@ -3,7 +3,7 @@ import Cycles "mo:base/ExperimentalCycles";
 import Principal "mo:base/Principal";
 import Error "mo:base/Error";
 import Nat "mo:base/Nat";
-import Map "mo:base/HashMap";
+import Map  "mo:stable-hash-map/Map";
 import Debug "mo:base/Debug";
 import Text "mo:base/Text";
 import T          "types";
@@ -28,11 +28,13 @@ module {
     type FanAccountData                 = T.FanAccountData;
     type UserId = T.UserId;
 
+       let { ihash; nhash; thash; phash; calcHash } = Map;
+
     public class FanData() {
-        private var fanData = Map.HashMap<UserId, FanAccountData>(1, Principal.equal, Principal.hash);
+        private var fanData = Map.new<UserId, FanAccountData>(phash);
 
         public func put(caller: UserId, data: FanAccountData) {
-          fanData.put(caller, data);
+          let a = Map.put(fanData, phash, caller, data);
         };
 
         public func getMemoryStatus() : async (Nat, Nat){
@@ -42,7 +44,7 @@ module {
         };  
 
         public func get(caller: UserId) : ?FanAccountData {
-          return fanData.get(caller);
+          return Map.get(fanData, phash, caller);
         };
 
         public func del(caller : UserId) : ?FanAccountData {
@@ -50,7 +52,7 @@ module {
 
           switch (entry) {
             case (?entry) {
-              fanData.delete(caller);
+              Map.delete(fanData, phash, caller);
             };
             case (null) {};
           };
@@ -59,20 +61,13 @@ module {
         };
 
         public func update(caller: UserId, info: FanAccountData) : async (){
-            var update = fanData.replace(caller, info);
+            var update = Map.replace(fanData, phash, caller, info);
         };
 
         public func entries() : Iter.Iter<(UserId, FanAccountData)> {
-          return fanData.entries();
+          return Map.entries(fanData);
         };
 
-        public func preupgrade() : Map.HashMap<UserId, FanAccountData> {
-          return fanData;
-        };
-
-        public func postupgrade(stableData : [(UserId, FanAccountData)]) {
-          fanData := Map.fromIter<UserId, FanAccountData>(stableData.vals(), 10, Principal.equal, Principal.hash);
-        };
 
 
 

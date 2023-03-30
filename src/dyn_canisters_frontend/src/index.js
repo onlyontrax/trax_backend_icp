@@ -230,44 +230,44 @@ const getOwnerOfCanisterId = async () =>{
 
 
 
-async function processAndUploadChunk(
-  videoBuffer: ArrayBuffer,
-  byteStart: number,
-  videoSize: number,
-  videoId: string,
-  chunk: number
-) {
-  const videoSlice = videoBuffer.slice(
-    byteStart,
-    Math.min(videoSize, byteStart + MAX_CHUNK_SIZE)
-  );
-  const sliceToNat = encodeArrayBuffer(videoSlice);
-  return putVideoChunk(videoId, chunk, sliceToNat); // sc call
-}
+// async function processAndUploadChunk(
+//   videoBuffer: ArrayBuffer,
+//   byteStart: number,
+//   videoSize: number,
+//   videoId: string,
+//   chunk: number
+// ) {
+//   const videoSlice = videoBuffer.slice(
+//     byteStart,
+//     Math.min(videoSize, byteStart + MAX_CHUNK_SIZE)
+//   );
+//   const sliceToNat = encodeArrayBuffer(videoSlice);
+//   return putVideoChunk(videoId, chunk, sliceToNat); // sc call
+// }
 
-// Wraps up the previous functions into one step for the UI to trigger
-async function uploadVideo(userId: string, file: File, caption: string) {
-  const videoBuffer = (await file?.arrayBuffer()) || new ArrayBuffer(0);
+// // Wraps up the previous functions into one step for the UI to trigger
+// async function uploadVideo(userId: string, file: File, caption: string) {
+//   const videoBuffer = (await file?.arrayBuffer()) || new ArrayBuffer(0);
 
-  const videoInit = getVideoInit(userId, file, caption);
-  const videoId = await createVideo(videoInit);
+//   const videoInit = getVideoInit(userId, file, caption);
+//   const videoId = await createVideo(videoInit);
 
-  let chunk = 1;
-  const thumb = await generateThumbnail(file);
-  await uploadVideoPic(videoId, thumb);
+//   let chunk = 1;
+//   const thumb = await generateThumbnail(file);
+//   await uploadVideoPic(videoId, thumb);
 
-  const putChunkPromises = [];
-  for (
-    let byteStart = 0;
-    byteStart < file.size;
-    byteStart += MAX_CHUNK_SIZE, chunk++
-  ) {
-    putChunkPromises.push(
-      processAndUploadChunk(videoBuffer, byteStart, file.size, videoId, chunk)
-    );
-  }
+//   const putChunkPromises = [];
+//   for (
+//     let byteStart = 0;
+//     byteStart < file.size;
+//     byteStart += MAX_CHUNK_SIZE, chunk++
+//   ) {
+//     putChunkPromises.push(
+//       processAndUploadChunk(videoBuffer, byteStart, file.size, videoId, chunk)
+//     );
+//   }
 
-
+// }
 
 
 

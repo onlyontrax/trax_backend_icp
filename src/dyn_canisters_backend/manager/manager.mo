@@ -5,7 +5,7 @@ import IC "../ic.types";
 import FanBucket "../fan/fan-bucket";
 import ArtistBucket "../artist/artist-bucket";
 import Nat "mo:base/Nat";
-import Map "mo:base/HashMap";
+import Map  "mo:stable-hash-map/Map";
 import Debug "mo:base/Debug";
 import Text "mo:base/Text";
 import T          "./types";
@@ -46,6 +46,8 @@ actor Manager {
 
   private let ic : IC.Self = actor "aaaaa-aa";
 
+     let { ihash; nhash; thash; phash; calcHash } = Map;
+
   // private type fan_bucket = FanBucket.FanBucket;
 
   stable var numOfFanAccounts: Nat = 0;
@@ -53,45 +55,48 @@ actor Manager {
 
 //  let fanBucket : FanBucket.FanBucket = FanBucket.FanBucket();
 
-  var userToCanisterMap = Map.HashMap<Text, (Principal, Nat64)>(1, Text.equal, Text.hash);
+  var userToCanisterMap = Map.new<Text, (Principal, Nat64)>(thash);
 
-  var fanAccountsMap = Map.HashMap<UserId, CanisterId>(1, Principal.equal, Principal.hash);
-  var artistAccountsMap = Map.HashMap<UserId, CanisterId>(1, Principal.equal, Principal.hash);
+  var fanAccountsMap = Map.new<UserId, CanisterId>(phash);
+  var artistAccountsMap = Map.new<UserId, CanisterId>(phash);
 
 
   public query func getTotalFanAccounts() :  async Nat{    numOfFanAccounts    };  
   public query func getTotalArtistAccounts() :  async Nat{   numOfArtistAccounts   };
-  public query func getFanAccountEntries() : async [(Principal, Principal)]{    Iter.toArray(fanAccountsMap.entries());     };
-  public query func getArtistAccountEntries() : async [(Principal, Principal)]{   Iter.toArray(artistAccountsMap.entries());    };
-  public query func getCanisterFan(fan: Principal) : async (?Principal){    fanAccountsMap.get(fan);   };
-  public query func getCanisterArtist(artist: Principal) : async (?Principal){   artistAccountsMap.get(artist);    };
+  public query func getFanAccountEntries() : async [(Principal, Principal)]{    Iter.toArray(Map.entries(fanAccountsMap));     };
+  public query func getArtistAccountEntries() : async [(Principal, Principal)]{   Iter.toArray(Map.entries(artistAccountsMap));    };
+  public query func getCanisterFan(fan: Principal) : async (?Principal){    Map.get(fanAccountsMap, phash, fan);   };
+  public query func getCanisterArtist(artist: Principal) : async (?Principal){   Map.get(artistAccountsMap, phash, artist);    };
+
 
   public query func getOwnerOfFanCanister(canisterId: Principal) : async (?UserId){ 
-    var fanID : ?UserId = null;
-    for(fan in fanAccountsMap.entries()){
-      var canID = fan.1;
+    
+    for((key, value) in Map.entries(fanAccountsMap)){
+      var fan: ?UserId = ?key;
+      var canID = value;
       if (canID == canisterId){
-        fanID := ?fan.0;
+        return fan;
       };
     };
-    return fanID;
+
+    return null;
   };
 
 
   public func transferOwnershipFan(currentOwner: Principal, newOwner: Principal) : async (){
-    switch(fanAccountsMap.get(currentOwner)){
+    switch(Map.get(fanAccountsMap, phash, currentOwner)){
       case(?canisterId){
-        let update = fanAccountsMap.delete(currentOwner);
-        fanAccountsMap.put(newOwner, canisterId);
+        Map.delete(fanAccountsMap, phash, currentOwner);
+        let a = Map.put(fanAccountsMap, phash, newOwner, canisterId);
 
       }; case null throw Error.reject("This fan account doesnt exist");
     }
   };
 
   public func transferOwnershipArtist(currentOwner: Principal, newOwner: Principal) : async (){
-    switch(artistAccountsMap.get(currentOwner)){
+    switch(Map.get(artistAccountsMap, phash, currentOwner)){
       case(?canisterId){
-        let update = artistAccountsMap.replace(newOwner, canisterId)
+        let update = Map.replace(artistAccountsMap, phash, newOwner, canisterId)
       }; case null throw Error.reject("This artist account doesnt exist");
     }
   };
@@ -113,7 +118,7 @@ actor Manager {
     // let {canister_id} = await ic.create_canister({settings = null});
 
     if(userType == #fan){
-      switch(fanAccountsMap.get(userID)){
+      switch(Map.get(fanAccountsMap, phash, userID)){
         case(?exists){
           throw Error.reject("This principal is already associated with an account");
         }; case null{
@@ -124,7 +129,7 @@ actor Manager {
       }
       
     }else{
-      switch(artistAccountsMap.get(userID)){
+      switch(Map.get(artistAccountsMap, phash, userID)){
         case(?exists){
           throw Error.reject("This principal is already associated with an account");
         }; case null {
@@ -154,11 +159,11 @@ actor Manager {
           }}));
 
         if(userType == #fan){   
-          fanAccountsMap.put(userID, canisterId);
+          let a = Map.put(fanAccountsMap, phash, userID, canisterId);
           numOfFanAccounts := numOfFanAccounts + 1;
         }
         else{   
-          artistAccountsMap.put(userID, canisterId);
+          let b = Map.put(artistAccountsMap, phash, userID, canisterId);
           numOfArtistAccounts := numOfArtistAccounts + 1;
         };
 
@@ -172,18 +177,18 @@ actor Manager {
 
   public func deleteCanister(user: UserId, canisterId: Principal, userType: UserType) :  async (Bool){
     if(userType == #fan){
-      switch(fanAccountsMap.get(user)){
+      switch(Map.get(fanAccountsMap, phash, user)){
         case(?fanAccount){
-          let removedFan = fanAccountsMap.remove(user);
+          Map.delete(fanAccountsMap, phash, user);
           let res = await canisterUtils.deleteCanister(?canisterId);
           return true;
         };
         case null false
       }
     }else{
-       switch(artistAccountsMap.get(user)){
+       switch(Map.get(artistAccountsMap, phash, user)){
         case(?artistAccount){
-          let removedArtist = artistAccountsMap.remove(user);
+          Map.delete(artistAccountsMap, phash, user);
           return true;
         };
         case null false

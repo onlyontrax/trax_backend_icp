@@ -3,7 +3,8 @@ import Cycles "mo:base/ExperimentalCycles";
 import Principal "mo:base/Principal";
 import Error "mo:base/Error";
 import Nat "mo:base/Nat";
-import Map "mo:base/HashMap";
+import Map  "mo:stable-hash-map/Map";
+
 import Debug "mo:base/Debug";
 import Text "mo:base/Text";
 import T          "types";
@@ -34,16 +35,18 @@ module {
     type ArtistAccountData = T.ArtistAccountData;
     type UserId = T.UserId;
 
+    let { ihash; nhash; thash; phash; calcHash } = Map;
+
     public class ArtistContentData() {
-        private var content = Map.HashMap<ContentId, Content>(1, Text.equal, Text.hash);
-        private var chunksData = Map.HashMap<ChunkId, ChunkData>(1, Text.equal, Text.hash);
+        private var content = Map.new<ContentId, Content>(thash);
+        private var chunksData = Map.new<ChunkId, ChunkData>(thash);
 
         public func put(id: ContentId, data: Content) {
-          content.put(id, data);
+          let a = Map.put(content, thash, id, data);
         };
 
         public func get(id: ContentId) : ?Content {
-          return content.get(id);
+          return Map.get(content, thash, id);
         };
 
         public func del(id : ContentId) : ?Content {
@@ -51,7 +54,7 @@ module {
 
           switch (entry) {
             case (?entry) {
-              content.delete(id);
+              Map.delete(content, thash, id);
             };
             case (null) {};
           };
@@ -60,28 +63,28 @@ module {
         };
 
         public func update(id: ContentId, data: Content) : async (){
-            var update = content.replace(id, data);
+            var update = Map.replace(content, thash, id, data);
         };
 
         public func entries() : Iter.Iter<(ContentId, Content)> {
-          return content.entries();
+          return Map.entries(content);
         };
 
 
 
         public func chunksPut(id: ChunkId, data: ChunkData) {
-          chunksData.put(id, data);
+          let a = Map.put(chunksData, thash, id, data);
         };
 
         public func chunksGet(id: ChunkId) : ?ChunkData {
-          chunksData.get(id);
+          Map.get(chunksData, thash, id);
         };
 
         public func chunksDel(id : ChunkId) : ?ChunkData {
           let entry : ?ChunkData = chunksGet(id);
           switch (entry) {
             case (?entry) {
-              chunksData.delete(id);
+              Map.delete(chunksData, thash, id);
             };
             case (null) {};
           };
@@ -90,22 +93,8 @@ module {
         };
 
         public func chunksEntries() : Iter.Iter<(ChunkId, ChunkData)> {
-          return chunksData.entries();
+          return Map.entries(chunksData);
         };
-
-
-
-
-
-        public func preupgrade() : Map.HashMap<ContentId, Content> {
-          return content;
-
-        };
-
-        public func postupgrade(stableData : [(ContentId, Content)]) {
-          content := Map.fromIter<ContentId, Content>(stableData.vals(), 10, Text.equal, Text.hash);
-        };
-
 
 
     }
