@@ -2,7 +2,6 @@ import Cycles "mo:base/ExperimentalCycles";
 import Principal "mo:base/Principal";
 import Error "mo:base/Error";
 import Nat "mo:base/Nat";
-import Map "mo:base/HashMap";
 import Debug "mo:base/Debug";
 import Text "mo:base/Text";
 import T          "types";
@@ -68,6 +67,7 @@ actor class FanBucket(accountInfo: ?T.FanAccountData, fanAccount: Principal) = t
 
   public func getProfileInfo(user: Principal) : async (?FanAccountData){
     // assert(owner == msg.caller);
+    Debug.print("fan");
     fanAccountData.get(user);
   };
 

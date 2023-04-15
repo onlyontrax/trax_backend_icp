@@ -44,6 +44,44 @@
 
         <button type="button" id="create">Create canister</button>
       
+      <br/><br/>
+
+        <h1>Create Artist Profile: </h1>
+      
+        <label for="usernameA">Enter your username: &nbsp;</label>
+        <input id="usernameA" alt="Username" type="text" />
+            <br/>
+        <label for="displayNameA">Enter your display name: &nbsp;</label>
+        <input id="displayNameA" alt="Display Name" type="text" />
+            <br/>
+        <label for="principalA">Enter your principal: &nbsp;</label>
+        <input id="principalA" alt="Principal" type="text" />
+            <br/>
+        <label for="emailA">Enter your email address: &nbsp;</label>
+        <input id="emailA" alt="Email" type="text" />
+            <br/>
+        <label for="firstNameA">Enter your first name: &nbsp;</label>
+        <input id="firstNameA" alt="First Name" type="text" />
+            <br/>
+        <label for="lastNameA">Enter your last name: &nbsp;</label>
+        <input id="lastNameA" alt="Last Name" type="text" />
+            <br/>
+        <label for="countryA">Enter your country: &nbsp;</label>
+        <input id="countryA" alt="Country" type="text" />
+            <br/>
+        <label for="dateOfBirthA">Enter your date of birth: &nbsp;</label>
+        <input id="dateOfBirthA" alt="dob" type="number" />
+            <br/>
+        <label for="bioA">Enter your bio: &nbsp;</label>
+        <input id="bioA" alt="bio" type="text" />
+            <br/>
+        <button type="button" id="createA">Create canister</button>
+
+<!-- 
+        country: Text;
+        dateOfBirth: Nat;
+        bio: ?Text; -->
+      
 
 
       <!-- <div>
@@ -52,7 +90,7 @@
       </div> -->
 
       <div>
-        <h1>Get Profile Info for <input id="getInfoPrince" type="text"/></h1>
+        <h1>Get Fan Profile Info for <input id="getInfoPrince" type="text"/></h1>
         <button type="button" id="getProfile">Get Profile Info</button>
         <div>
           <input id="usernameP"/>
@@ -78,6 +116,45 @@
         </div>
       </div>
 
+
+      <div>
+        <h1>Get Artist Profile Info for <input id="getInfoPrinceA" type="text"/></h1>
+        <button type="button" id="getProfileA">Get Profile Info</button>
+        <div>
+          <input id="usernamePA"/>
+        </div>
+        <div>
+          <input id="displayNamePA"/>
+        </div>
+        <div>
+          <input id="principalPA"/>
+        </div>
+        <div>
+          <input id="emailPA"/>
+        </div>
+        <div>
+          <input id="firstNamePA"/>
+        </div>
+        <div>
+          <input id="lastNamePA"/>
+        </div>
+        <div>
+          <input id="countryPA"/>
+        </div>
+        <div>
+          <input id="dateOfBirthPA" type="number"/>
+        </div>
+        <div>
+          <input id="bioPA"/>
+        </div>
+
+        <div>
+          <button type="button" id="updateProfileA">update Profile Info</button>
+        </div>
+      </div>
+
+      
+
       <div>
         <h1>Get Canister ID of fan</h1>
         <input id="canOwner"/>
@@ -86,9 +163,24 @@
       </div>
 
       <div>
+        <h1>Get Canister ID of artist</h1>
+        <input id="canOwnerArtist"/>
+        <button type="button" id="getCanIDArtist">get</button>
+        <!-- <p id="canID"></p> -->
+      </div>
+
+
+      <div>
         <h1>Get fan from canisterID</h1>
         <input id="canID"/>
         <button type="button" id="getFanID">get</button>
+        <p id="fanID"></p>
+      </div>
+
+      <div>
+        <h1>Get artist from canisterID</h1>
+        <input id="canIDA"/>
+        <button type="button" id="getArtistID">get</button>
         <p id="fanID"></p>
       </div>
 
@@ -114,8 +206,40 @@
         <button id="getThisPrincipal">get this principal</button>
       </div>
 
-      <button type="button" id="hello">hello</button>
+      <!-- <button type="button" id="hello">hello</button> -->
+
+      <!-- <LoadingIndicator
+        loadingMessage="Uploading..."
+        completedMessage="Uploaded!"
+        isLoading={uploading && !uploadingClean}
+      /> -->
+      <input
+        id="video-upload"
+        type="file"
+        accept=".mp4"
+      />
+      <!-- {videoFile && ( -->
+        <div className="video-add-details">
+          <!-- <video src={videoPreviewURL} muted autoPlay loop /> -->
+          <div className="details-entry">
+            <label for="caption-content">CAPTION: </label>
+            <input
+              id="caption-content"
+             
+              placeholder="Add caption"
+            />
+            <label for="id-artist-upload">ARTIST Principal: </label>
+            <input type="text" id="id-artist-upload">
+            <button type="button" id="postContent" className="medium primary">
+              Post
+            </button>
+          </div>
+        </div>
+      <!-- )} -->
 
     </main>
+    
+      
+   
   </body>
 </html>

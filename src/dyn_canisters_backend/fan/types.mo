@@ -1,7 +1,7 @@
 
 
 import Hash "mo:base/Hash";
-import Map "mo:base/HashMap";
+
 import Principal "mo:base/Principal";
 import Nat "mo:base/Nat";
 import Nat32 "mo:base/Nat32";
@@ -33,6 +33,6 @@ module{
         displayName: Text;  
         // gender: Gender;
         emailAddress: Text;
-        profilePhoto: ?ProfilePhoto;
+        // profilePhoto: ?ProfilePhoto;
     };
 }

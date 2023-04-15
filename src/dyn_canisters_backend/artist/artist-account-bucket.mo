@@ -23,6 +23,8 @@ import ArtistData    "account-data";
 import ArtistContentData    "content-data";
 import Prim "mo:⛔";
 import Map  "mo:stable-hash-map/Map";
+import ContentStorageBucket "./artist-bucket";
+import ArtistContentBucket "./content-bucket";
 
 
 actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Principal) = this {
@@ -33,23 +35,27 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
   type ContentInit               = T.ContentInit;
   type ContentId                 = T.ContentId;
   type ContentInfo               = T.ContentInfo;
-  type ChunkId = T.ChunkId;
+  type ChunkId                   = T.ChunkId;
+  type CanisterId                = T.CanisterId;
+  
+  let { ihash; nhash; thash; phash; calcHash } = Map;
 
   stable var owner: Principal = artistAccount;
-  let { ihash; nhash; thash; phash; calcHash } = Map;
 
   private let accountData : ArtistData.ArtistData = ArtistData.ArtistData();
   
   private let canisterUtils : CanisterUtils.CanisterUtils = CanisterUtils.CanisterUtils();
 
+  stable let contentToCanister = Map.new<ContentId, CanisterId>(thash);
+  stable let contentCanisterIds = Buffer.Buffer<CanisterId>(10);
+
+  // stable var spaceFilled = Nat
+
+  
   
   var version: Nat = 1;
-  let limit = 20_000_000_000_000;
 
-  
-
-  var artistToProfileInfoMap = Map.HashMap<UserId, ArtistAccountData>(1, Principal.equal, Principal.hash);
-  var contentToCanister = Map.HashMap<ContentId, ArtistAccountData>(thash);
+  // var artistToProfileInfoMap = Map.HashMap<UserId, ArtistAccountData>(1, Principal.equal, Principal.hash);
 
   stable var initialised: Bool = false;
 
@@ -77,54 +83,84 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
 
   public func getProfileInfo(user: UserId) : async (?ArtistAccountData){
     // assert(owner == msg.caller);
-    Debug.print(debug_show accountData.get(user));
-    Debug.print("artist");
     accountData.get(user);
   };
 
 
-  public func deleteCanister(user: Principal): async(){
+  public func deleteAccount(user: Principal): async(){
     let canisterId :?Principal = ?(Principal.fromActor(this));
     let res = await canisterUtils.deleteCanister(canisterId);
   };
 
 
-  public query func getPrincipalThis() :  async (Principal){
-    Principal.fromActor(this);
-  };
+  
 
   // upload cover photo 
+  public func uploadCoverPhoto(): async(){
+
+  };
   // upload profile pic 
+  public func uploadProfilePhoto(): async(){
+
+  };
+
   // get profile pic 
+  public func getProfilePhoto(): async(){
+
+  };
   // get upload pic
-  // make upgradable 
-  // 
+  public func getUploadCoverPhoto(): async(){
+
+  };
+  
 
 
-  public func createContent(i : ContentInit) : async ?ContentId {
-   let now = Time.now();
-    let videoId = Principal.toText(i.userId) # "-" # i.name # "-" # (Int.toText(now));
-    switch (contentData.get(videoId)) {
-    case (?_) { /* error -- ID already taken. */ null };
-    case null { /* ok, not taken yet. */
-           contentData.put(videoId,
-                            {
-                              videoId = videoId;
-                              userId = i.userId ;
-                              name = i.name ;
-                              createdAt = i.createdAt ;
-                              uploadedAt = now ;
-                              caption =  i.caption ;
-                              chunkCount = i.chunkCount ;
-                              tags = i.tags ;
-                              viewCount = 0 ;
-                              contentType = i.contentType;
-                            });
-          //  state.uploaded.put(i.userId, videoId);
-          //  logEvent(#createVideo({info = i}));
-           ?videoId
-         };
+  public func createContent(i : ContentInit) : async ?(ContentId, CanisterId) {
+    var canIdToReturn : CanisterId = null;
+    // check if there is free space in current canister 
+    let index = contentCanisterIds.length;
+    let currCanID = contentCanisterIds.get(index);
+    let can = actor(currCanID): actor { 
+      getMemoryStatus: () -> async (Nat, Nat);
+      createContent: () -> async (?ContentId);
     };
+
+    let memStatus = await can.getMemoryStatus();
+    if(memStatus.0 > 100){
+      canIdToReturn := currCanID;
+
+    }else{
+      let newCanister = await createStorageCanister(i.userId)
+      contentCanisterIds.add(newCanister);
+      let contentId = await createContent(i);
+      canIdToReturn := newCanister;
+
+    };
+
+
+
+    // if so, make inter canister call to add content to canisters db and add canisterId + contentId to hashmap 
+    // if not create new canister, and initialise it with new content and add canisterId + contentId to hashmap 
+    // 
+  };
+
+  public func getMemoryStatus() : async (Nat, Nat){
+          let memSize = Prim.rts_memory_size();
+          let heapSize = Prim.rts_heap_size();
+          return (memSize, heapSize);
+  }; 
+
+  private func createStorageCanister(owner: UserId) : async (Principal) {
+    Debug.print(debug_show Principal.toText(owner));
+    Cycles.add(1_000_000_000_000);
+
+    var canisterId: ?Principal = null;
+    // let {canister_id} = await ic.create_canister({settings = null});
+
+          let b = await ArtistContentBucket.ArtistContentBucket(owner);
+          
+            canisterId := ?(Principal.fromActor(b));
+
   };
 
   func chunkId(contentId : ContentId, chunkNum : Nat) : ChunkId {
@@ -164,16 +200,6 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
     }
   };
 
-  public func wallet_receive() : async { accepted: Nat64 } {
-    let available = Cycles.available();
-    let accepted = Cycles.accept(Nat.min(available, limit));
-    { accepted = Nat64.fromNat(accepted) };
-  };
-
-  public func wallet_balance() : async Nat {
-    return Cycles.balance();
-  };
-
 
 
   // public func getMemoryStatus() : async (Nat, Nat){
@@ -181,6 +207,10 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
   //   let heapSize = Prim.rts_heap_size();
   //   return (memSize, heapSize);
   // };  
+
+  public query func getPrincipalThis() :  async (Principal){
+    Principal.fromActor(this);
+  };
 
   
 }

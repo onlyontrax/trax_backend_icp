@@ -35,7 +35,7 @@ import WalletUtils "../utils/wallet.utils";
 
 actor Manager {
 
-  type FanAccountData                 = T.FanAccountData;
+  type FanAccountData                 = T.FanAccount;
   type ArtistAccountData              = T.ArtistAccountData;
   type UserType                       = T.UserType;
   type UserId                         = T.UserId;
@@ -58,11 +58,11 @@ actor Manager {
   var userToCanisterMap = Map.new<Text, (Principal, Nat64)>(thash);
 
   var fanAccountsMap = Map.new<UserId, CanisterId>(phash);
-  var artistAccountsMap = Map.new<UserId, CanisterId>(phash);
+  var artistAccountsMap = Map.new<UserId, CanisterId>(phash); // array of canister id 
 
 
   public query func getTotalFanAccounts() :  async Nat{    numOfFanAccounts    };  
-  public query func getTotalArtistAccounts() :  async Nat{   numOfArtistAccounts   };
+  public query func getTotalArtistAccounts() :  async Nat{   numOfArtistAccounts   }; 
   public query func getFanAccountEntries() : async [(Principal, Principal)]{    Iter.toArray(Map.entries(fanAccountsMap));     };
   public query func getArtistAccountEntries() : async [(Principal, Principal)]{   Iter.toArray(Map.entries(artistAccountsMap));    };
   public query func getCanisterFan(fan: Principal) : async (?Principal){    Map.get(fanAccountsMap, phash, fan);   };
@@ -76,6 +76,19 @@ actor Manager {
       var canID = value;
       if (canID == canisterId){
         return fan;
+      };
+    };
+
+    return null;
+  };
+
+  public query func getOwnerOfArtistCanister(canisterId: Principal) : async (?UserId){ 
+    
+    for((key, value) in Map.entries(artistAccountsMap)){
+      var artist: ?UserId = ?key;
+      var canID = value;
+      if (canID == canisterId){
+        return artist;
       };
     };
 
@@ -96,9 +109,9 @@ actor Manager {
   public func transferOwnershipArtist(currentOwner: Principal, newOwner: Principal) : async (){
     switch(Map.get(artistAccountsMap, phash, currentOwner)){
       case(?canisterId){
-        let update = Map.replace(artistAccountsMap, phash, newOwner, canisterId)
+        let update = Map.replace(artistAccountsMap, phash, newOwner, canisterId);
       }; case null throw Error.reject("This artist account doesnt exist");
-    }
+    };
   };
 
   public func createProfileFan(accountData: FanAccountData) : async (Principal){
@@ -111,7 +124,7 @@ actor Manager {
 
   private func createCanister(userID: Principal, userType: UserType, accountDataFan: ?FanAccountData, accountDataArtist: ?ArtistAccountData): async (Principal) {
     // assert((accountDataArtist != null) && (accountDataFan != null));
-    Debug.print(debug_show userID);
+    Debug.print(debug_show Principal.toText(userID));
     Cycles.add(1_000_000_000_000);
 
     var canisterId: ?Principal = null;

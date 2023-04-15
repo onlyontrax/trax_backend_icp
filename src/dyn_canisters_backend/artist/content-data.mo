@@ -25,8 +25,8 @@ import CanisterUtils  "../utils/canister.utils";
 import Prim "mo:⛔";
 
 module {
+  
     type ContentId = T.ContentId;
-    
 
     type Content = T.Content;
     type ChunkData = T.ChunkData;
@@ -40,6 +40,8 @@ module {
     public class ArtistContentData() {
         private var content = Map.new<ContentId, Content>(thash);
         private var chunksData = Map.new<ChunkId, ChunkData>(thash);
+        // global mapping to store contentIDs to canisterid 
+        // when uploading new content, need to check current canister available memory, if not enough space for incoming file, create new canister
 
         public func put(id: ContentId, data: Content) {
           let a = Map.put(content, thash, id, data);

@@ -1,5 +1,4 @@
 import Hash "mo:base/Hash";
-import Map "mo:base/HashMap";
 import Principal "mo:base/Principal";
 import Nat "mo:base/Nat";
 import Nat32 "mo:base/Nat32";
@@ -37,8 +36,10 @@ module Types {
         lastName: Text;
         username: Text;
         displayName: Text;  
+        userPrincipal: Principal;
         // gender: Gender;
         emailAddress: Text;
+        
     };
 
     public type FanAccountData = {
@@ -70,12 +71,12 @@ module Types {
         lastName: Text;
         username: Text;
         displayName: Text;  
-        gender: Gender;
+        // gender: Gender;
         userPrincipal: Principal;
         emailAddress: Text;
         country: Text;
         dateOfBirth: Nat;
-        bio: ?Text;
+        bio: Text;
     };
 
     public type Role = {
