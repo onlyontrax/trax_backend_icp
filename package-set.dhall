@@ -4,12 +4,19 @@ let Package =
 
 let
   -- This is where you can add your own packages to the package-set
-  additions =
-    [{ name = "stable-hash-map"
-   , repo = "https://github.com/ZhenyaUsenko/motoko-hash-map"
-   , version = "v8.0.0"
-   , dependencies = ["base"]
-   }] : List Package
+  additions = [
+    { name = "stable-hash-map",
+       repo = "https://github.com/ZhenyaUsenko/motoko-hash-map",
+       version = "v8.0.0", 
+       dependencies = ["base"]
+   },
+   {
+    name = "stable-buffer",
+    repo = "https://github.com/canscale/StableBuffer",
+    version = "v1.2.0",
+    dependencies = ["base"]
+   }
+   ] : List Package
 
 let
   {- This is where you can override existing packages in the package-set

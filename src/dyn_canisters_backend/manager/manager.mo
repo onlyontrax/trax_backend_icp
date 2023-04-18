@@ -3,7 +3,7 @@ import Principal "mo:base/Principal";
 import Error "mo:base/Error";
 import IC "../ic.types";
 import FanBucket "../fan/fan-bucket";
-import ArtistBucket "../artist/artist-bucket";
+import ArtistBucket "../artist/artist-account-bucket";
 import Nat "mo:base/Nat";
 import Map  "mo:stable-hash-map/Map";
 import Debug "mo:base/Debug";
@@ -24,6 +24,8 @@ import Trie       "mo:base/Trie";
 import TrieMap    "mo:base/TrieMap";
 import CanisterUtils "../utils/canister.utils";
 import WalletUtils "../utils/wallet.utils";
+import Utils "../utils/utils";
+import Prim "mo:⛔";
 
 // 1. User creates account through sign up page 
 // 2. Once completed userID (from frontend), principal (if the user has one), and initial information and documents,  will be sent to the contract as params
@@ -52,6 +54,8 @@ actor Manager {
 
   stable var numOfFanAccounts: Nat = 0;
   stable var numOfArtistAccounts: Nat = 0;
+  stable var MAX_CANISTER_SIZE: Nat = 48_000_000_000; // <-- approx. 40MB
+  stable var CYCLE_AMOUNT : Nat = 1_000_000_000_000;
 
 //  let fanBucket : FanBucket.FanBucket = FanBucket.FanBucket();
 
@@ -67,6 +71,14 @@ actor Manager {
   public query func getArtistAccountEntries() : async [(Principal, Principal)]{   Iter.toArray(Map.entries(artistAccountsMap));    };
   public query func getCanisterFan(fan: Principal) : async (?Principal){    Map.get(fanAccountsMap, phash, fan);   };
   public query func getCanisterArtist(artist: Principal) : async (?Principal){   Map.get(artistAccountsMap, phash, artist);    };
+
+  public func changeCycleAmount(amount: Nat) : (){
+    CYCLE_AMOUNT := amount;
+  };
+
+  public func changeCanisterSize(newSize: Nat) : (){
+    MAX_CANISTER_SIZE := newSize;
+  };
 
 
   public query func getOwnerOfFanCanister(canisterId: Principal) : async (?UserId){ 
@@ -125,7 +137,7 @@ actor Manager {
   private func createCanister(userID: Principal, userType: UserType, accountDataFan: ?FanAccountData, accountDataArtist: ?ArtistAccountData): async (Principal) {
     // assert((accountDataArtist != null) && (accountDataFan != null));
     Debug.print(debug_show Principal.toText(userID));
-    Cycles.add(1_000_000_000_000);
+    Cycles.add(CYCLE_AMOUNT);
 
     var canisterId: ?Principal = null;
     // let {canister_id} = await ic.create_canister({settings = null});
@@ -136,8 +148,7 @@ actor Manager {
           throw Error.reject("This principal is already associated with an account");
         }; case null{
           let b = await FanBucket.FanBucket(accountDataFan, userID);
-          
-            canisterId := ?(Principal.fromActor(b));
+          canisterId := ?(Principal.fromActor(b));
         }
       }
       
@@ -179,12 +190,23 @@ actor Manager {
           let b = Map.put(artistAccountsMap, phash, userID, canisterId);
           numOfArtistAccounts := numOfArtistAccounts + 1;
         };
-
         return canisterId;
       };
     };
-    
   };
+
+
+  public func getCanisterMemoryAvailable(canisterId: Principal) : async (Nat){
+    let can = actor(Principal.toText(canisterId)): actor { 
+        getMemoryStatus: () -> async (Nat, Nat);
+    };
+    
+    let memStatus = await can.getMemoryStatus();
+    let availableMemory: Nat = MAX_CANISTER_SIZE - memStatus.0;
+    return availableMemory;
+  };
+
+
 
 
 
@@ -209,6 +231,12 @@ actor Manager {
     }
   };
 
+  public func getMemoryStatus() : async (Nat, Nat){
+    let memSize = Prim.rts_memory_size();
+    let heapSize = Prim.rts_heap_size();
+    return (memSize, heapSize);
+  }; 
+
 
 
    public  func installCode(canisterId : Principal, owner : Blob, wasmModule : Blob) : async () {
@@ -219,7 +247,7 @@ actor Manager {
     await canisterUtils.installCode(canisterId, owner, wasmModule);
   };
 
-  public shared query func cyclesBalance() : async (Nat) {
+  public shared func cyclesBalance() : async (Nat) {
     // if (not Utils.isAdmin(caller)) {
     //   throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
     // };
