@@ -4,7 +4,7 @@ import Error "mo:base/Error";
 import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
 import Text "mo:base/Text";
-import T          "types";
+import T          "../types";
 import Hash       "mo:base/Hash";
 import Nat32      "mo:base/Nat32";
 import Nat64      "mo:base/Nat64";
@@ -19,21 +19,22 @@ import Buffer     "mo:base/Buffer";
 import Trie       "mo:base/Trie";
 import TrieMap    "mo:base/TrieMap";
 import CanisterUtils  "../utils/canister.utils";
-import FanData    "account-data";
-
+import Map  "mo:stable-hash-map/Map";
 
 
 actor class FanBucket(accountInfo: ?T.FanAccountData, fanAccount: Principal) = this {
 
-  type FanAccountData                 = T.FanAccountData;
-  type UserId = T.UserId;
-  var version: Nat = 1;
+  let { ihash; nhash; thash; phash; calcHash } = Map;
 
-  stable var owner: Principal = fanAccount;
+  type FanAccountData                = T.FanAccountData;
+  type UserId                        = T.UserId;
+  
+  var version: Nat                   = 1;
+  stable var owner: Principal        = fanAccount;
 
   private let canisterUtils : CanisterUtils.CanisterUtils = CanisterUtils.CanisterUtils();
 
-  private let fanAccountData : FanData.FanData = FanData.FanData();
+  private var fanData = Map.new<UserId, FanAccountData>(phash);
 
   stable var initialised: Bool = false;
 
@@ -41,7 +42,7 @@ actor class FanBucket(accountInfo: ?T.FanAccountData, fanAccount: Principal) = t
     assert(initialised == false);
     switch(accountInfo){
       case(?data){
-        fanAccountData.put(fanAccount, data);
+        let a = Map.put(fanData, phash, fanAccount, data);
         initialised := true;
         return true;
       };case null return false;
@@ -51,10 +52,10 @@ actor class FanBucket(accountInfo: ?T.FanAccountData, fanAccount: Principal) = t
 
   public func transferOwnership(currentOwner: Principal, newOwner: Principal) : async(Principal){
     assert(currentOwner == owner);
-    switch(fanAccountData.get(currentOwner)){
-      case(?fanData){
-        fanAccountData.put(newOwner, fanData);
-        let res = fanAccountData.del(currentOwner);
+    switch(Map.get(fanData, phash, currentOwner)){
+      case(?data){
+        let a = Map.put(fanData, phash, newOwner, data);
+        let res = Map.delete(fanData, phash, currentOwner);
       }; case(null){
         throw Error.reject("This principal is already associated with an account");
       };
@@ -68,14 +69,14 @@ actor class FanBucket(accountInfo: ?T.FanAccountData, fanAccount: Principal) = t
   public func getProfileInfo(user: Principal) : async (?FanAccountData){
     // assert(owner == msg.caller);
     Debug.print("fan");
-    fanAccountData.get(user);
+    Map.get(fanData, phash, user);
   };
 
   public func updateProfileInfo(caller: Principal, info: FanAccountData) : async (Bool){
     assert(owner == caller);
-    switch(fanAccountData.get(caller)){
+    switch(Map.get(fanData, phash, caller)){
       case(?exists){
-        var update = fanAccountData.update(caller, info);
+        var update = Map.replace(fanData, phash, caller, info);
         true
       };case null false;
     }

@@ -4,7 +4,7 @@ import Error "mo:base/Error";
 import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
 import Text "mo:base/Text";
-import T          "types";
+import T          "../types";
 import Hash       "mo:base/Hash";
 import Nat32      "mo:base/Nat32";
 import Nat64      "mo:base/Nat64";
@@ -19,13 +19,17 @@ import Buffer     "mo:base/Buffer";
 import Trie       "mo:base/Trie";
 import TrieMap    "mo:base/TrieMap";
 import CanisterUtils  "../utils/canister.utils";
-import ArtistData    "account-data";
-import ArtistContentData    "content-data";
 import Prim "mo:⛔";
 import Map  "mo:stable-hash-map/Map";
 // import ContentStorageBucket "./artist-bucket";
-import ArtistContentBucket "./content-bucket";
+import ArtistContentBucket "./artist-content-bucket";
 import B "mo:stable-buffer/StableBuffer";
+import Utils              "../utils/utils";
+import WalletUtils        "../utils/wallet.utils";
+// import ArtistAccountBucket "artist-account-bucket";
+import IC "../ic.types";
+
+
 
 
 actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Principal) = this {
@@ -39,31 +43,27 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
   type ContentInfo               = T.ContentInfo;
   type ChunkId                   = T.ChunkId;
   type CanisterId                = T.CanisterId;
+  type StatusRequest             = T.StatusRequest;
+  type StatusResponse             = T.StatusResponse;
   
   stable var MAX_CANISTER_SIZE: Nat = 48_000_000_000; // <-- approx. 40MB
-  stable var CYCLE_AMOUNT : Nat = 1_000_000_000_000;
+  stable var CYCLE_AMOUNT : Nat     = 1_000_000_000_000;
+  let limit                         = 20_000_000_000_000;
 
-  stable var version: Nat = 1;
+  private let ic : IC.Self = actor "aaaaa-aa";
+
+  stable var VERSION: Nat = 1;
   stable var initialised: Bool = false;
 
   stable var owner: Principal = artistAccount;
 
-  private let accountData : ArtistData.ArtistData = ArtistData.ArtistData();
-  
+  private let walletUtils : WalletUtils.WalletUtils = WalletUtils.WalletUtils();
   private let canisterUtils : CanisterUtils.CanisterUtils = CanisterUtils.CanisterUtils();
 
+  private let artistData = Map.new<UserId, ArtistAccountData>(phash);
   private let contentToCanister = Map.new<ContentId, CanisterId>(thash);
+
   let contentCanisterIds = B.init<CanisterId>();
-
-  // stable var spaceFilled = Nat
-
-  public func changeCycleAmount(amount: Nat) : (){
-    CYCLE_AMOUNT := amount;
-  };
-
-  public func changeCanisterSize(newSize: Nat) : (){
-    MAX_CANISTER_SIZE := newSize;
-  };
 
   public query func getCanisterOfContent(contentId: ContentId) : async ?(CanisterId){
     Map.get(contentToCanister, thash, contentId);
@@ -73,62 +73,98 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
     B.toArray(contentCanisterIds);
   };
 
-  public func getAvailableMemoryCanister(canisterId: Principal) : async (Nat){
+  public func getAvailableMemoryCanister(canisterId: Principal) : async ?Nat{
     let can = actor(Principal.toText(canisterId)): actor { 
-        getMemoryStatus: () -> async (Nat, Nat);
+        getStatus: (?StatusRequest) -> async ?StatusResponse;
+    };
+
+    let request : StatusRequest = {
+        cycles: Bool = false;
+        heap_memory_size: Bool = false; 
+        memory_size: Bool = true;
     };
     
-    let memStatus = await can.getMemoryStatus();
-    let availableMemory: Nat = MAX_CANISTER_SIZE - memStatus.0;
-    return availableMemory;
+    // let memStatus: ?StatusResponse = await can.getStatus(?request);
+    switch(await can.getStatus(?request)){
+      case(?status){
+        switch(status.memory_size){
+          case(?memSize){
+            let availableMemory: Nat = MAX_CANISTER_SIZE - memSize;
+            return ?availableMemory;
+          };
+          case null null;
+        };
+      };
+      case null null;
+    };
   };
 
-  
-  
 
 
   public func initCanister() :  async(Bool) { // Initialise new cansiter. This is called only once after the account has been created. I
     assert(initialised == false);
     switch(accountInfo){
       case(?info){
-        accountData.put(artistAccount, info);
+        let a = Map.put(artistData, phash, artistAccount, info);
         initialised := true;
         return true;
       };case null return false;
     };
   };
 
+
+
   public func updateProfileInfo(caller: UserId, info: ArtistAccountData) : async (Bool){
     assert(owner == caller);
-    switch(accountData.get(caller)){
+    switch(Map.get(artistData, phash, caller)){
       case(?exists){
-        var update = accountData.update(caller, info);
+        var update = Map.replace(artistData, phash, caller, info);
         true
       };case null false;
-    }
+    };
   };
 
+
+
+  
 
 
 
   public func getProfileInfo(user: UserId) : async (?ArtistAccountData){
     // assert(owner == msg.caller);
-    accountData.get(user);
+    Map.get(artistData, phash, user);
   };
 
 
-  public func deleteAccount(user: Principal): async(){
+
+
+  public shared({caller}) func deleteAccount(user: Principal): async(){
     let canisterId :?Principal = ?(Principal.fromActor(this));
     let res = await canisterUtils.deleteCanister(canisterId);
   };
 
 
+
+
+  public func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
+    switch(Map.get(contentToCanister, thash, contentId)){
+      case(?canID){
+        let can = actor(Principal.toText(canID)): actor { 
+          removeContent: (ContentId, Nat) -> async ();
+        };
+        await can.removeContent(contentId, chunkNum);
+        let a = Map.remove(contentToCanister, thash, contentId);
+      };
+      case null { };
+    };
+  };
   
 
   // upload cover photo 
   public func uploadCoverPhoto(): async(){
 
   };
+
   // upload profile pic 
   public func uploadProfilePhoto(): async(){
 
@@ -138,6 +174,7 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
   public func getProfilePhoto(): async(){
 
   };
+
   // get upload pic
   public func getUploadCoverPhoto(): async(){
 
@@ -162,25 +199,35 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
       // Debug.print("currCanID: " #debug_show currCanID);
       
 
-      let availableMemory: Nat = await getAvailableMemoryCanister(canisters);
+      let availableMemory: ?Nat = await getAvailableMemoryCanister(canisters);
 
-      if(availableMemory > fileSize){ // replace hardcoded val with size of ingress message
+      switch(await getAvailableMemoryCanister(canisters)){
+        case(?availableMemory){
+          if(availableMemory > fileSize){ // replace hardcoded val with size of ingress message
 
-        let can = actor(Principal.toText(canisters)): actor { 
-          createContent: (ContentInit, Nat) -> async (?ContentId);
+          let can = actor(Principal.toText(canisters)): actor { 
+            createContent: (ContentInit, Nat) -> async (?ContentId);
+          };
+
+          switch(await can.createContent(i, fileSize)){
+            case(?contentId){ 
+              let a = Map.put(contentToCanister, thash, contentId, canisters);
+              uploaded := true;
+              return ?(contentId, canisters);
+            };
+            case null { 
+              return null
+            };
+          };
         };
 
-        switch(await can.createContent(i, fileSize)){
-          case(?contentId){ 
-            let a = Map.put(contentToCanister, thash, contentId, canisters);
-            uploaded := true;
-            return ?(contentId, canisters);
-          };
-          case null { 
-            return null
-          };
+        };
+        case null { 
+          return null
         };
       };
+
+      
     };
 
     if(uploaded == false){
@@ -210,18 +257,8 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
     }else{
       return null;
     }
-
-
-    // if so, make inter canister call to add content to canisters db and add canisterId + contentId to hashmap 
-    // if not create new canister, and initialise it with new content and add canisterId + contentId to hashmap 
-    // 
   };
 
-  public func getMemoryStatus() : async (Nat, Nat){
-    let memSize = Prim.rts_memory_size();
-    let heapSize = Prim.rts_heap_size();
-    return (memSize, heapSize);
-  }; 
 
   private func createStorageCanister(owner: UserId) : async ?(Principal) {
     Debug.print(debug_show Principal.toText(owner));
@@ -232,8 +269,47 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
 
     let b = await ArtistContentBucket.ArtistContentBucket(owner);
     canisterId := ?(Principal.fromActor(b));
+
+    switch (canisterId) {
+      case null {
+        throw Error.reject("Bucket init error");
+      };
+      case (?canisterId) {
+
+        let self: Principal = Principal.fromActor(this);
+
+        let controllers: ?[Principal] = ?[canisterId, owner, self];
+        
+        await ic.update_settings(({canister_id = canisterId; 
+          settings = {
+            controllers = controllers;
+            freezing_threshold = null;
+            memory_allocation = null;
+            compute_allocation = null;
+          }}));
+      };
+    };
+    
+
     return canisterId;
   };
+
+
+  public func changeCycleAmount(amount: Nat) : (){
+    CYCLE_AMOUNT := amount;
+  };
+
+  public func changeCanisterSize(newSize: Nat) : (){
+    MAX_CANISTER_SIZE := newSize;
+  };
+
+  public func getMemoryStatus() : async (Nat, Nat){
+    let memSize = Prim.rts_memory_size();
+    let heapSize = Prim.rts_heap_size();
+    return (memSize, heapSize);
+  }; 
+
+  
 
   func chunkId(contentId : ContentId, chunkNum : Nat) : ChunkId {
     contentId # (Nat.toText(chunkNum))
@@ -254,35 +330,78 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
   //   }
   // };
 
-  // public func getContentInfo(caller: UserId, id: ContentId) : async ?ContentInfo{
-  //   do ? {
-  //     let res = contentData.get(id)!;
-  //     {
-  //       contentId = id;
-  //       userId = res.userId;
-  //       createdAt = res.createdAt;
-  //       uploadedAt = res.uploadedAt;
-  //       caption = res.caption;
-  //       tags = res.tags;
-  //       viewCount = res.viewCount;
-  //       name = res.name;
-  //       chunkCount = res.chunkCount;
-  //       contentType = res.contentType;
-  //     }
-  //   }
-  // };
+  private func getCurrentHeapMemory(): Nat {
+    Prim.rts_heap_size();
+  };
+
+  private func getCurrentMemory(): Nat {
+    Prim.rts_memory_size();
+  };
+
+  private func getCurrentCycles(): Nat {
+    Cycles.balance();
+  };
+
+
+  public func getStatus(request: ?StatusRequest): async ?StatusResponse {
+        switch(request) {
+            case (null) {
+                return null;
+            };
+            case (?_request) {
+                var cycles: ?Nat = null;
+                if (_request.cycles) {
+                    cycles := ?getCurrentCycles();
+                };
+                var memory_size: ?Nat = null;
+                if (_request.memory_size) {
+                    memory_size := ?getCurrentMemory();
+                };
+
+                var heap_memory_size: ?Nat = null;
+                if (_request.heap_memory_size) {
+                    heap_memory_size := ?getCurrentHeapMemory();
+                };
+                return ?{
+                    cycles = cycles;
+                    memory_size = memory_size;
+                    heap_memory_size = heap_memory_size;
+                };
+            };
+        };
+    };
 
 
 
-  // public func getMemoryStatus() : async (Nat, Nat){
-  //   let memSize = Prim.rts_memory_size();
-  //   let heapSize = Prim.rts_heap_size();
-  //   return (memSize, heapSize);
-  // };  
+
+  public func wallet_receive() : async { accepted: Nat64 } {
+    let available = Cycles.available();
+    let accepted = Cycles.accept(Nat.min(available, limit));
+    { accepted = Nat64.fromNat(accepted) };
+  };
+
+  public shared func wallet_send(wallet_send: shared () -> async { accepted: Nat }, amount : Nat) : async { accepted: Nat } {// Signature of the wallet recieve function in the calling canister
+    Cycles.add(amount);
+    let l = await wallet_send();
+    { accepted = amount };
+  };
+
 
   public query func getPrincipalThis() :  async (Principal){
     Principal.fromActor(this);
   };
+
+  public query func version() : async Nat {
+		return VERSION;
+	};
+
+  // public shared({caller}) func cyclesBalance() : async (Nat) {
+  //   if (not Utils.isAdmin(caller)) {
+  //     throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
+  //   };
+
+  //   return walletUtils.cyclesBalance();
+  // };
 
   
 }

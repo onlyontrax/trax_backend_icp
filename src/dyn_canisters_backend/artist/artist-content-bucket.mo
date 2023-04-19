@@ -4,7 +4,7 @@ import Error              "mo:base/Error";
 import Nat                "mo:base/Nat";
 import Debug              "mo:base/Debug";
 import Text               "mo:base/Text";
-import T                  "types";
+import T                  "../types";
 import Hash               "mo:base/Hash";
 import Nat32              "mo:base/Nat32";
 import Nat64              "mo:base/Nat64";
@@ -19,8 +19,6 @@ import Buffer             "mo:base/Buffer";
 import Trie               "mo:base/Trie";
 import TrieMap            "mo:base/TrieMap";
 import CanisterUtils      "../utils/canister.utils";
-import ArtistData         "account-data";
-import ArtistContentData  "content-data";
 import Prim               "mo:⛔";
 import Map                "mo:stable-hash-map/Map";
 import Utils              "../utils/utils";
@@ -29,6 +27,9 @@ import WalletUtils        "../utils/wallet.utils";
 
 
 actor class ArtistContentBucket(owner: Principal) = this {
+  // change [Nat] to Blob for sc memory improvement
+  // pull cycles from parent canister if balance is below threshold 
+  //  
 
 
 //   type ArtistAccountData         = T.ArtistAccountData;
@@ -38,13 +39,14 @@ actor class ArtistContentBucket(owner: Principal) = this {
   type ContentInfo               = T.ContentInfo;
   type ChunkId                   = T.ChunkId;
   type CanisterId                = T.CanisterId;
-  type Content                   = T.Content;
   type ChunkData                 = T.ChunkData;
+  type StatusRequest             = T.StatusRequest;
+  type StatusResponse             = T.StatusResponse;
   
   let { ihash; nhash; thash; phash; calcHash } = Map;
 
   stable var canisterOwner: Principal = owner;
-  stable var MAX_CANISTER_SIZE: Nat = 48_000_000_000; // <-- approx. 48MB
+  stable var MAX_CANISTER_SIZE: Nat = 48_000_000_000; // <-- approx. 48GB
   var version: Nat = 1;
 
   private let canisterUtils : CanisterUtils.CanisterUtils = CanisterUtils.CanisterUtils();
@@ -67,25 +69,7 @@ actor class ArtistContentBucket(owner: Principal) = this {
   };
 
 
-  // upload cover photo 
-  public func uploadCoverPhoto(): async(){
-
-  };
-  // upload profile pic 
-  public func uploadProfilePhoto(): async(){
-
-  };
-
-  // get profile pic 
-  public func getProfilePhoto(): async(){
-
-  };
-  // get upload pic
-  public func getUploadCoverPhoto(): async(){
-
-  };
-
-
+// #region - CREATE & UPLOAD CONTENT
   public func createContent(i : ContentInit, fileSize: Nat) : async ?ContentId {
     
     let now = Time.now();
@@ -97,13 +81,13 @@ actor class ArtistContentBucket(owner: Principal) = this {
                             {
                               contentId = videoId;
                               userId = i.userId;
-                              name = i.name ;
-                              createdAt = i.createdAt ;
-                              uploadedAt = now ;
-                              caption =  i.caption ;
-                              chunkCount = i.chunkCount ;
-                              tags = i.tags ;
-                              viewCount = 0 ;
+                              name = i.name;
+                              createdAt = i.createdAt;
+                              uploadedAt = now;
+                              caption =  i.caption;
+                              chunkCount = i.chunkCount;
+                              tags = i.tags;
+                              viewCount = 0;
                               contentType = i.contentType;
                             });
            ?videoId
@@ -120,35 +104,91 @@ actor class ArtistContentBucket(owner: Principal) = this {
       let a = Map.put(chunksData, thash, chunkId(contentId, chunkNum), chunkData);
   };
 
+
   func chunkId(contentId : ContentId, chunkNum : Nat) : ChunkId {
     contentId # (Nat.toText(chunkNum))
   };
 
+
   public func getContentChunk(contentId : ContentId, chunkNum : Nat) : async ?[Nat8] {
-      Map.get(chunksData, thash, contentId);
+      Map.get(chunksData, thash, chunkId(contentId, chunkNum));
   };
+
+  public func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
+    let a = Map.remove(chunksData, thash, chunkId(contentId, chunkNum));
+    let b = Map.remove(content, thash, contentId);
+  };
+// #endregion
+
+
 
   public func getContentInfo(caller: UserId, id: ContentId) : async ?ContentInfo{
       Map.get(content, thash, id);
   };
 
-  public func getMemoryStatus() : async (Nat, Nat){
-    let memSize = Prim.rts_memory_size();
-    let heapSize = Prim.rts_heap_size();
-    return (memSize, heapSize);
-  }; 
 
-  public shared({caller}) func cyclesBalance() : async (Nat) {
-    if (not Utils.isAdmin(caller)) {
-      throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
-    };
+  // public query func is_full() : async Bool {
+	// 	let MAX_SIZE_THRESHOLD_MB : Float = 1500;
 
-    return walletUtils.cyclesBalance();
-  };
+	// 	let rts_memory_size : Nat = Prim.rts_memory_size();
+	// 	let mem_size : Float = Float.fromInt(rts_memory_size);
+	// 	let memory_in_megabytes = Float.abs(mem_size * 0.000001);
 
+	// 	if (memory_in_megabytes > MAX_SIZE_THRESHOLD_MB) {
+	// 		return true;
+	// 	} else {
+	// 		return false;
+	// 	};
+	// };
+
+
+
+
+// #region - UTILS
   public query func getPrincipalThis() :  async (Principal){
     Principal.fromActor(this);
   };
 
+  private func getCurrentHeapMemory(): Nat {
+    Prim.rts_heap_size();
+  };
+
+  private func getCurrentMemory(): Nat {
+    Prim.rts_memory_size();
+  };
+
+  private func getCurrentCycles(): Nat {
+    Cycles.balance();
+  };
+
+
+  public func getStatus(request: ?StatusRequest): async ?StatusResponse {
+        switch(request) {
+            case (null) {
+                return null;
+            };
+            case (?_request) {
+                var cycles: ?Nat = null;
+                if (_request.cycles) {
+                    cycles := ?getCurrentCycles();
+                };
+                var memory_size: ?Nat = null;
+                if (_request.memory_size) {
+                    memory_size := ?getCurrentMemory();
+                };
+
+                var heap_memory_size: ?Nat = null;
+                if (_request.heap_memory_size) {
+                    heap_memory_size := ?getCurrentHeapMemory();
+                };
+                return ?{
+                    cycles = cycles;
+                    memory_size = memory_size;
+                    heap_memory_size = heap_memory_size;
+                };
+            };
+        };
+    };
+// #endregion
   
 }

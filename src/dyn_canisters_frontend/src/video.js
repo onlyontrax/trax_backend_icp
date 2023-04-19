@@ -61,7 +61,7 @@ async function processAndUploadChunk(videoBuffer, byteStart, videoSize, videoId,
 }
 
 // Wraps up the previous functions into one step for the UI to trigger
-async function uploadVideo(userId, file, caption) {
+async function uploadVideo(userId, file, caption) { 
     const actor = await createBucketActor({
         canisterId: bucket
       });

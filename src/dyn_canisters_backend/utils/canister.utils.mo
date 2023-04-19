@@ -2,7 +2,7 @@ import Principal "mo:base/Principal";
 import Blob "mo:base/Blob";
 import Error "mo:base/Error";
 
-import Types "../manager/types";
+import Types "../types";
 import IC "../ic.types";
 
 module {
