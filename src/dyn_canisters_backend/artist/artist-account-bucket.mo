@@ -28,11 +28,12 @@ import Utils              "../utils/utils";
 import WalletUtils        "../utils/wallet.utils";
 // import ArtistAccountBucket "artist-account-bucket";
 import IC "../ic.types";
+// import Manager "canister:dyn_canisters_backend";
 
 
 
 
-actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Principal) = this {
+ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Principal) = this {
 
   let { ihash; nhash; thash; phash; calcHash } = Map;
 
@@ -40,21 +41,24 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
   type UserId                    = T.UserId;
   type ContentInit               = T.ContentInit;
   type ContentId                 = T.ContentId;
-  type ContentInfo               = T.ContentInfo;
+  type ContentData               = T.ContentData;
   type ChunkId                   = T.ChunkId;
   type CanisterId                = T.CanisterId;
   type StatusRequest             = T.StatusRequest;
   type StatusResponse             = T.StatusResponse;
+  // type Manager = Manager.Manager;
   
-  stable var MAX_CANISTER_SIZE: Nat = 48_000_000_000; // <-- approx. 40MB
-  stable var CYCLE_AMOUNT : Nat     = 1_000_000_000_000;
+  stable var MAX_CANISTER_SIZE: Nat =     48_000_000_000; // <-- approx. 40GB
+  stable var CYCLE_AMOUNT : Nat     =  1_000_000_000_000;
   let limit                         = 20_000_000_000_000;
+
 
   private let ic : IC.Self = actor "aaaaa-aa";
 
   stable var VERSION: Nat = 1;
   stable var initialised: Bool = false;
 
+  
   stable var owner: Principal = artistAccount;
 
   private let walletUtils : WalletUtils.WalletUtils = WalletUtils.WalletUtils();
@@ -63,15 +67,25 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
   private let artistData = Map.new<UserId, ArtistAccountData>(phash);
   private let contentToCanister = Map.new<ContentId, CanisterId>(thash);
 
-  let contentCanisterIds = B.init<CanisterId>();
+  private let contentCanisterIds = B.init<CanisterId>();
+
+
+  // public query func getCreatorPrincipal() : async (Principal){
+  //   creator;
+  // };
+
 
   public query func getCanisterOfContent(contentId: ContentId) : async ?(CanisterId){
     Map.get(contentToCanister, thash, contentId);
   };
 
+
+
   public query func getAllContentCanisters() : async [CanisterId]{
     B.toArray(contentCanisterIds);
   };
+
+
 
   public func getAvailableMemoryCanister(canisterId: Principal) : async ?Nat{
     let can = actor(Principal.toText(canisterId)): actor { 
@@ -160,33 +174,13 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
   };
   
 
-  // upload cover photo 
-  public func uploadCoverPhoto(): async(){
 
-  };
-
-  // upload profile pic 
-  public func uploadProfilePhoto(): async(){
-
-  };
-
-  // get profile pic 
-  public func getProfilePhoto(): async(){
-
-  };
-
-  // get upload pic
-  public func getUploadCoverPhoto(): async(){
-
-  };
-  
-
-
-  public shared({caller}) func createContent(i : ContentInit, fileSize: Nat) : async ?(ContentId, Principal) {
+  public  func createContent(i : ContentInit) : async ?(ContentId, Principal) {
     // assert();
-    if(caller != i.userId){
-      throw Error.reject("caller is not the publisher");
-    };
+    // if(caller != i.userId){
+    //   throw Error.reject("caller is not the publisher");
+    // };
+
     // var canIdToReturn : ?Principal;
     // check if there is free space in current canister 
     // let index : Nat = contentCanisterIds.size();
@@ -197,19 +191,18 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
       Debug.print("canister: " # debug_show canisters);
 
       // Debug.print("currCanID: " #debug_show currCanID);
-      
 
       let availableMemory: ?Nat = await getAvailableMemoryCanister(canisters);
 
       switch(await getAvailableMemoryCanister(canisters)){
         case(?availableMemory){
-          if(availableMemory > fileSize){ // replace hardcoded val with size of ingress message
+          if(availableMemory > i.size){ // replace hardcoded val with size of ingress message
 
           let can = actor(Principal.toText(canisters)): actor { 
             createContent: (ContentInit, Nat) -> async (?ContentId);
           };
 
-          switch(await can.createContent(i, fileSize)){
+          switch(await can.createContent(i, i.size)){
             case(?contentId){ 
               let a = Map.put(contentToCanister, thash, contentId, canisters);
               uploaded := true;
@@ -226,8 +219,6 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
           return null
         };
       };
-
-      
     };
 
     if(uploaded == false){
@@ -237,7 +228,7 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
           let newCan = actor(Principal.toText(canID)): actor { 
             createContent: (ContentInit, Nat) -> async (?ContentId);
           };
-          switch(await newCan.createContent(i, fileSize)){
+          switch(await newCan.createContent(i, i.size)){
             case(?contentId){ 
               let a = Map.put(contentToCanister, thash, contentId, canID);
               uploaded := true;
@@ -279,6 +270,9 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
         let self: Principal = Principal.fromActor(this);
 
         let controllers: ?[Principal] = ?[canisterId, owner, self];
+
+        let cid = { canister_id = Principal.fromActor(this)};
+        Debug.print("IC status..."  # debug_show(await ic.canister_status(cid)));
         
         await ic.update_settings(({canister_id = canisterId; 
           settings = {
@@ -289,10 +283,28 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
           }}));
       };
     };
+
+    // await checkCyclesBalance();
+
     
 
     return canisterId;
   };
+
+
+  // public func transferCyclesToThisCanister() : async (){
+  //   let self: Principal = Principal.fromActor(this);
+  //   Manager.transferCyclesToCanister(self, limit);
+
+  // };
+
+  // public func checkCyclesBalance () : async(){
+  //   let bal = getCurrentCycles();
+  //   Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
+  //   if(bal < CYCLE_AMOUNT){
+  //      await transferCyclesToThisCanister();
+  //   };
+  // };
 
 
   public func changeCycleAmount(amount: Nat) : (){
@@ -303,11 +315,11 @@ actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Princ
     MAX_CANISTER_SIZE := newSize;
   };
 
-  public func getMemoryStatus() : async (Nat, Nat){
-    let memSize = Prim.rts_memory_size();
-    let heapSize = Prim.rts_heap_size();
-    return (memSize, heapSize);
-  }; 
+  // public func getMemoryStatus() : async (Nat, Nat){
+  //   let memSize = Prim.rts_memory_size();
+  //   let heapSize = Prim.rts_heap_size();
+  //   return (memSize, heapSize);
+  // }; 
 
   
 

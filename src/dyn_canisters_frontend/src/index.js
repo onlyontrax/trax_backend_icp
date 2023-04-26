@@ -1,10 +1,15 @@
 import { Actor, HttpAgent } from '@dfinity/agent';
-import { dyn_canisters_backend } from '../../declarations/dyn_canisters_backend';
+import { canisterId, dyn_canisters_backend } from '../../declarations/dyn_canisters_backend';
 import { idlFactory as fanBucketIDL } from '../../declarations/fan_bucket/fan_bucket.did.js';
-import { idlFactory as artistBucketIDL} from '../../declarations/artist_bucket/artist_bucket.did.js'
+import { idlFactory as artistBucketIDL} from '../../declarations/artist_account_bucket/artist_account_bucket.did.js'
+import { idlFactory as artistContentBucketIDL} from '../../declarations/artist_content_bucket/artist_content_bucket.did.js'
 import { Principal } from '@dfinity/principal'; 
 // import PlugConnect from '@psychedelic/plug-connect';
 import {useUploadVideo} from './video';
+// import {getFileExtension, getReverseFileExtension } from "./video2";
+const MAX_CHUNK_SIZE = 1024 * 500; // 500kb
+const REWARDS_CHECK_INTERVAL = 60000;
+const hashtagRegExp = /(?:\s|^)#[A-Za-z0-9\-._]+(?:\s|$)/gim;
 
 export const createBucketActor = async ({ idl, canisterId }) => {
   // console.log(idlFactory)
@@ -205,28 +210,12 @@ try {
 
 
 const createProfileArtist = async () => {
-  let username = document.getElementById('usernameA');
-  let displayName = document.getElementById('displayNameA');
   let userPrincipal = document.getElementById('principalA');
-  // let gender = document.getElementById('gender');
-  let emailAddress = document.getElementById('emailA');
-  let lastName = document.getElementById('lastNameA');
-  let firstName = document.getElementById('firstNameA');
-  let country = document.getElementById('countryA');
-  let dob = document.getElementById('dateOfBirthA');
-  let bio = document.getElementById('bioA');
-
-
+  
   let artistAccountData = {
-    firstName: firstName.value,
-        lastName: lastName.value,
-        userPrincipal: Principal.fromText(userPrincipal.value),
-        username: username.value,
-        displayName: displayName.value,
-        emailAddress: emailAddress.value,
-        country: country.value,
-        dateOfBirth: BigInt(dob.value),
-        bio: bio.value
+    createdAt: BigInt(Number(Date.now() * 1000)),
+    userPrincipal: Principal.fromText(userPrincipal.value),
+    
   }
 
   try {
@@ -422,22 +411,308 @@ const getOwnerOfCanisterIdArtist = async () =>{
 
 
 
-const upload = async()=>{
-  const videoFile = document.getElementById('video-upload');
-  const userId = document.getElementById('id-artist-upload');
-  const canisterId = await dyn_canisters_backend.getCanisterArtist(userId);
+// const upload = async()=>{
+//   // const videoFile = document.getElementById('video-upload');
+//   const userId = document.getElementById('id-artist-upload');
+//   const canisterId = await dyn_canisters_backend.getCanisterArtist(userId.value);
+
   
-  const caption = document.getElementsById('caption-content');
-    if (!videoFile || !caption) {
-      return;
-    }
-    // useUploadVideo.setFile(videoFile);
-    // useUploadVideo.setCaption(caption);
-    // useUploadVideo.setReady(true);
-    useUploadVideo(userId, videoFile, true)
-    // setUploading(true);
+//   const caption = document.getElementsById('caption-content');
+//     if (!videoFile || !caption) {
+//       return;
+//     }
+//     // useUploadVideo.setFile(videoFile);
+//     // useUploadVideo.setCaption(caption);
+//     // useUploadVideo.setReady(true);
+//     handleUpload()
+//     useUploadVideo(userId, videoFile, true)
+//     // setUploading(true);
+// }
+const getFileExtension = (type)  => {
+  switch(type) {
+    case 'image/jpeg':
+      return { 'jpeg' : null };
+    case 'image/gif':
+      return { 'gif' : null };
+    case 'image/jpg':
+      return { 'jpg' : null };
+    case 'image/png':
+      return { 'png' : null };          
+    case 'image/svg':
+      return { 'svg' : null };          
+    case 'video/avi':
+      return { 'avi' : null };                            
+    case 'video/aac':
+      return { 'aac' : null };
+    case 'video/mp4':
+      return { 'mp4' : null };        
+    case 'audio/wav':
+      return { 'wav' : null };                         
+    case 'audio/mp3':
+      return { 'mp3' : null };
+    default :
+    return null;
+  }
+};
+
+const getReverseFileExtension = (type) => {
+  switch(Object.keys(type)[0]) {
+    case 'jpeg':
+      return  'image/jpeg';
+    case 'gif':
+      return  'image/gif'; 
+    case 'jpg':
+      return  'image/jpg';       
+    case 'png':
+      return  'image/png';
+    case 'svg':
+      return  'image/svg';
+    case 'avi':
+      return  'video/avi';
+    case 'mp4':
+      return  'video/mp4';
+    case 'aac':
+      return  'video/aac';
+    case 'wav':
+      return  'audio/wav';
+    case 'mp3':
+      return  'audio/mp3';                                                                                                              
+    default :
+    return "";
+  }
+};
+
+var fileType;
+
+
+const upload = async () => {
+  // const videoFile = document.getElementById('video-upload');
+  // const file = handleFileChange(videoFile)
+  // event.preventDefault();
+  console.log(fileType)
+  const fileExtension = getFileExtension(fileType.type);
+  console.log(fileExtension);
+  const errors = [];
+  if (fileType === null || fileType === undefined || fileExtension === null) {
+    errors.push("File not valid!");
+  }
+  if (fileType.size > 10550000) {
+    errors.push("File size shouldn't be bigger than 10mb");
+  }
+
+  // if (errors.length > 0) {
+  //   setErrros(errors);
+  //   return;
+  // }
+  
+  const t0 = performance.now();
+  console.log('upload started...');
+  // setUploading(true);
+
+  const userId = document.getElementById('id-artist-upload');
+  console.log(typeof userId.value);
+  const canisterId = await dyn_canisters_backend.getCanisterArtist(Principal.fromText(userId.value));
+  console.log("artist-content-bucket canisterID: " + canisterId);
+  
+
+
+  const fileInfo  = { // ContentInit type
+    name: Math.random().toString(36).substring(2),
+    createdAt: BigInt(Number(Date.now() * 1000)),
+    size: BigInt(fileType.size),
+    caption: "Something",
+    tags: ["hiphop",  "dance", "grime"],
+    chunkCount: BigInt(Number(Math.ceil(fileType.size / MAX_CHUNK_SIZE))),
+    extension: fileExtension,
+    userId: Principal.fromText(userId.value)
+  };
+  console.log(fileInfo)
+
+  
+
+  const actor = await createBucketActor({
+    idl: artistBucketIDL,
+    canisterId: canisterId.toString()
+  });
+  console.log("ACTOR: " + actor);
+
+  // const ba = await BackendActor.getBackendActor();
+  // setValue(10);
+  // const authenticated = await authClient.isAuthenticated();
+  // console.log(authenticated);
+  const createRes = await actor.createContent(fileInfo);
+  console.log("Create Res[0][1]:  " + createRes[0][1]);
+  console.log("Create Res[0][0]:  " + createRes[0][0]);
+  // storageCanisterID = createRes[1];
+  // console.log(fileId);
+  // setValue(40);
+  const blob = fileType.blob;
+  const putChunkPromises = [];
+  let chunk = 1;
+  for (let byteStart = 0; byteStart < blob.size; byteStart += MAX_CHUNK_SIZE, chunk++ ) {
+    putChunkPromises.push(
+      processAndUploadChunk(blob, byteStart, createRes[0][0], chunk, fileType.size, createRes[0][1])
+    );
+  }
+
+  await Promise.all(putChunkPromises);
+  // await ba.updateStatus();
+  // setValue(100);
+  // setUploading(false);
+  // setReady(false);
+  // updateDeps();
+  // setFileData('Drag and drop a file or select add File');
+  const t1 = performance.now();
+  console.log("Upload took " + (t1 - t0) / 1000 + " seconds.")
+  
 }
 
+const encodeArrayBuffer = (file) => Array.from(new Uint8Array(file));
+
+const processAndUploadChunk = async ( blob, byteStart, fileId, chunk, fileSize, canisterId) => {
+  const blobSlice = blob.slice(
+    byteStart,
+    Math.min(Number(fileSize), byteStart + MAX_CHUNK_SIZE),
+    blob.type
+  );
+ 
+  const bsf = await blobSlice.arrayBuffer();
+  // const ba = await BackendActor.getBackendActor();
+
+  const actor = await createBucketActor({
+    idl: artistContentBucketIDL,
+    canisterId: canisterId.toString()
+  });
+  console.log("ACTOR: " + actor);
+  // console.log(fileId);
+  // console.log(chunk);
+  // console.log(fileSize);
+  // console.log(encodeArrayBuffer(bsf));
+  console.log("processAndUploadChunk finish!!")
+  return actor.putContentChunk(fileId, BigInt(chunk), encodeArrayBuffer(bsf));
+}
+
+
+
+
+const b64toBlob = (b64Data, contentType='', sliceSize=512) => {
+      
+  const byteCharacters = window.atob(b64Data);
+  const byteArrays = [];
+
+  for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+    const slice = byteCharacters.slice(offset, offset + sliceSize);
+
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+  const blob = new Blob(byteArrays, { type: contentType } );
+  return blob;
+}
+
+
+
+
+const handleFileChange = (event) => {
+    // setErrros([]);
+    // setReady(false);
+    // @ts-ignore
+    console.log("HERERE : " + event.target.files[0]);
+    const file = event.target.files[0];
+    // Make new FileReader
+    var reader = new FileReader();
+    // Convert the file to base64 text
+    reader.readAsDataURL(file);
+    reader.onloadend = () => {
+      if (reader.result === null) {
+        throw new Error('file empty...');
+      }
+      let encoded = reader.result.toString().replace(/^data:(.*,)?/, '');
+      if ((encoded.length % 4) > 0) {
+        encoded += '='.repeat(4 - (encoded.length % 4));
+      }
+      const blob = b64toBlob(encoded, file.type);
+      console.log(blob);
+      
+      fileType = { // FILE READER INFO
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        blob: blob,
+        file: file,
+        width: file.width,
+        height: file.height
+      };
+
+      console.log(file);
+      console.log(file.name + ' | ' + Math.round(file.size / 1000) + ' kB');
+
+
+      // return fileInfo
+
+      
+    //   setFileData(file.name + ' | ' + Math.round(file.size / 1000) + ' kB');
+      
+    //   setFile(fileInfo);
+    //   setReady(true);
+    };
+};
+
+
+const downloadFile = async () =>{
+  var userPrincipal = document.getElementById('download-principal');
+  var contentId = document.getElementById('download-content-id');
+
+  let artistAccountCanister = await dyn_canisters_backend.getCanisterArtist(Principal.fromText(userPrincipal.value));
+
+  const accountBucket = await createBucketActor({
+    idl: artistBucketIDL,
+    canisterId: artistAccountCanister.toString()
+  });
+
+  console.log("artistAccountCanister: "+artistAccountCanister.toString())
+
+  var artistContentCanister = await accountBucket.getCanisterOfContent(contentId.value);
+  console.log("artistContentCanister: "+artistContentCanister.toString())
+
+  const contentBucket = await createBucketActor({
+    idl: artistContentBucketIDL,
+    canisterId: artistContentCanister.toString()
+  });
+
+
+  var contentData = await contentBucket.getContentInfo(Principal.fromText(userPrincipal.value), contentId.value);
+  console.log(contentData);
+  console.log(contentData[0].extension);
+
+  // var contentChunks = await contentBucket.getContentChunk(contentId, contentData.chunkCount);
+
+  var chunks = [];
+    for (let i = 1; i <= Number(contentData[0].chunkCount); i++) {
+      const chunk = await contentBucket.getContentChunk(contentId.value, contentData[0].chunkCount);
+      if (chunk[0]) {
+        chunks.push(new Uint8Array(chunk[0]).buffer);
+      }
+    }
+  
+  const blob = new Blob(chunks, { type: getReverseFileExtension(contentData[0].extension)} );
+  const url = URL.createObjectURL(blob);
+
+  console.log(blob)
+  console.log(url);
+ 
+
+
+
+
+
+
+}
 
 
 const init = () => {
@@ -483,6 +758,16 @@ const init = () => {
 
   const getArtistIDCAN = document.querySelector('button#getArtistID');
   getArtistIDCAN.addEventListener('click', getOwnerOfCanisterIdArtist)
+
+  const fileUploadInput = document.querySelector('input#video-upload');
+  fileUploadInput.addEventListener('change', (file)=>{
+    handleFileChange(file);
+  } );
+
+  const downloadVideo = document.querySelector('button#downloadContent');
+  downloadVideo.addEventListener('click', downloadFile);
+
+  // const uploadContent
   
 };
 

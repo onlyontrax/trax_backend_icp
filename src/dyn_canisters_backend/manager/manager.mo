@@ -27,6 +27,7 @@ import WalletUtils "../utils/wallet.utils";
 import Utils "../utils/utils";
 import Prim "mo:⛔";
 
+
 // 1. User creates account through sign up page 
 // 2. Once completed userID (from frontend), principal (if the user has one), and initial information and documents,  will be sent to the contract as params
 // 3. A new canister will be initialised with the data given 
@@ -42,8 +43,8 @@ actor Manager {
   type UserType                       = T.UserType;
   type UserId                         = T.UserId;
   type CanisterId                     = T.CanisterId;
-  type StatusRequest             = T.StatusRequest;
-  type StatusResponse             = T.StatusResponse;
+  type StatusRequest                  = T.StatusRequest;
+  type StatusResponse                 = T.StatusResponse;
   // private stable var canisterId: ?Principal = null;
   private let canisterUtils : CanisterUtils.CanisterUtils = CanisterUtils.CanisterUtils();
   private let walletUtils : WalletUtils.WalletUtils = WalletUtils.WalletUtils();
@@ -62,7 +63,6 @@ actor Manager {
 //  let fanBucket : FanBucket.FanBucket = FanBucket.FanBucket();
 
   var userToCanisterMap = Map.new<Text, (Principal, Nat64)>(thash);
-
   var fanAccountsMap = Map.new<UserId, CanisterId>(phash);
   var artistAccountsMap = Map.new<UserId, CanisterId>(phash); // array of canister id 
 
@@ -126,12 +126,13 @@ actor Manager {
         let a = Map.put(fanAccountsMap, phash, newOwner, canisterId);
 
       }; case null throw Error.reject("This fan account doesnt exist");
-    }
+    };
   };
 
 
 
-  public func transferOwnershipArtist(currentOwner: Principal, newOwner: Principal) : async (){
+  public shared({caller}) func transferOwnershipArtist(currentOwner: Principal, newOwner: Principal) : async (){
+    assert(currentOwner == caller);
     switch(Map.get(artistAccountsMap, phash, currentOwner)){
       case(?canisterId){
         let update = Map.replace(artistAccountsMap, phash, newOwner, canisterId);
@@ -158,12 +159,10 @@ actor Manager {
   private func createCanister(userID: Principal, userType: UserType, accountDataFan: ?FanAccountData, accountDataArtist: ?ArtistAccountData): async (Principal) {
     // assert((accountDataArtist != null) && (accountDataFan != null));
     Debug.print(debug_show Principal.toText(userID));
-    let bal = getCurrentCycles();
-    Debug.print("Balance before: " #debug_show bal);
+    // let bal = getCurrentCycles();
+    
     Cycles.add(CYCLE_AMOUNT);
-    let balAfter = getCurrentCycles();
-     Debug.print("Balance After: " #debug_show balAfter);
-
+    
     // let bal = getCurrentCycles();
     // if(bal < CYCLE_AMOUNT){
 
@@ -193,7 +192,13 @@ actor Manager {
       };
     };
 
-  
+    let bal = getCurrentCycles();
+    Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
+    if(bal < CYCLE_AMOUNT){
+       // notify frontend that cycles is below threshold
+    };
+
+
     switch (canisterId) {
       case null {
         throw Error.reject("Bucket init error");
@@ -277,44 +282,66 @@ actor Manager {
     }
   };
 
-  public func getStatus(request: ?StatusRequest): async ?StatusResponse {
-        switch(request) {
-            case (null) {
-                return null;
-            };
-            case (?_request) {
-                var cycles: ?Nat = null;
-                if (_request.cycles) {
-                    cycles := ?getCurrentCycles();
-                };
-                var memory_size: ?Nat = null;
-                if (_request.memory_size) {
-                    memory_size := ?getCurrentMemory();
-                };
 
-                var heap_memory_size: ?Nat = null;
-                if (_request.heap_memory_size) {
-                    heap_memory_size := ?getCurrentHeapMemory();
-                };
-                return ?{
-                    cycles = cycles;
-                    memory_size = memory_size;
-                    heap_memory_size = heap_memory_size;
-                };
-            };
-        };
-    };
+
+  public func getStatus(request: ?StatusRequest): async ?StatusResponse {
+      switch(request) {
+          case (null) {
+              return null;
+          };
+          case (?_request) {
+              var cycles: ?Nat = null;
+              if (_request.cycles) {
+                  cycles := ?getCurrentCycles();
+              };
+              var memory_size: ?Nat = null;
+              if (_request.memory_size) {
+                  memory_size := ?getCurrentMemory();
+              };
+              var heap_memory_size: ?Nat = null;
+              if (_request.heap_memory_size) {
+                  heap_memory_size := ?getCurrentHeapMemory();
+              };
+              return ?{
+                  cycles = cycles;
+                  memory_size = memory_size;
+                  heap_memory_size = heap_memory_size;
+              };
+          };
+      };
+  };
+
+
 
   private func getCurrentHeapMemory(): Nat {
     Prim.rts_heap_size();
   };
 
+
+
   private func getCurrentMemory(): Nat {
     Prim.rts_memory_size();
   };
 
+
+
   private func getCurrentCycles(): Nat {
     Cycles.balance();
+  };
+
+
+
+  public shared func cyclesBalance() : async (Nat) {
+    // if (not Utils.isAdmin(caller)) {
+    //   throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
+    // };
+    return walletUtils.cyclesBalance();
+  };
+
+
+
+  public shared func transferCyclesToCanister(canisterId : Principal, amount : Nat) : async(){
+    await walletUtils.transferCycles(canisterId, amount);
   };
 
 
@@ -323,7 +350,6 @@ actor Manager {
     // if (not Utils.isAdmin(caller)) {
       // throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
     // };
-
     await canisterUtils.installCode(canisterId, owner, wasmModule);
   };
 };

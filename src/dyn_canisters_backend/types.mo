@@ -19,16 +19,23 @@ module Types {
     public type VideoId = Text; // chosen by createVideo
     public type ChunkId = Text; // VideoId # (toText(ChunkNum))
     
-    public type ProfilePhoto = [Nat8]; // encoded as a PNG file
-    public type CoverPhoto = [Nat8];
-    public type VideoPic = [Nat8]; // encoded as a PNG file
-    public type ChunkData = [Nat8]; // encoded as ???
+    public type ProfilePhoto = Blob; // encoded as a PNG file
+    public type CoverPhoto = Blob;
 
+    public type Thumbnail = Blob; // encoded as a PNG file
+    public type ChunkData = Blob; // encoded as ???
 
-    public type ContentType ={
-      #video;
-      #photo;
-      #audio;
+    public type FileExtension = {
+      #jpeg;
+      #jpg;
+      #png;
+      #gif;
+      #svg;
+      #mp3;
+      #wav;
+      #aac;
+      #mp4;
+      #avi;
     };
 
 
@@ -39,27 +46,28 @@ module Types {
       caption: Text;
       tags: [Text];
       chunkCount: Nat;
-      contentType: ContentType;
+      extension: FileExtension;
+      size: Nat;
     };
 
-    public type ContentInfo = {
+    public type ContentData = {
       contentId : Text;
       userId : UserId;
       createdAt : Timestamp;
       uploadedAt : Timestamp;
       caption: Text;
       tags: [Text];
-      viewCount: Nat;
       name: Text;
       chunkCount: Nat;
-      contentType: ContentType;
+      extension: FileExtension;
+      size: Nat;
     };
 
 
     public type FanAccountData = {
         userPrincipal: Principal;
         createdAt: Timestamp;
-        profilePhoto: ?ProfilePhoto;
+        // profilePhoto: ?ProfilePhoto;
     };
 
     public type UserType = {
@@ -70,8 +78,8 @@ module Types {
     public type ArtistAccountData = {
         createdAt: Timestamp;
         userPrincipal: Principal;
-        profilePhoto: ?ProfilePhoto;
-        coverPhoto: ?CoverPhoto;
+        // profilePhoto: ?ProfilePhoto;
+        // coverPhoto: ?CoverPhoto;
     };
 
     public type Role = {
@@ -82,40 +90,6 @@ module Types {
       // caller is artist
       #artist;
     };
-
-    /// Video.
-  public type Video = {
-    userId : UserId;
-    createdAt : Timestamp;
-    uploadedAt : Timestamp;
-    caption: Text;
-    tags: [Text];
-    viewCount: Nat;
-    name: Text;
-    chunkCount: Nat;
-  };
-
-  public type Photo = {
-    userId : UserId;
-    createdAt : Timestamp;
-    uploadedAt : Timestamp;
-    caption: Text;
-    tags: [Text];
-    viewCount: Nat;
-    name: Text;
-    chunkCount: Nat;
-  };
-
-  public type Audio = {
-    userId : UserId;
-    createdAt : Timestamp;
-    uploadedAt : Timestamp;
-    caption: Text;
-    tags: [Text];
-    viewCount: Nat;
-    name: Text;
-    chunkCount: Nat;
-  };
 
   public type StatusRequest = {
         cycles: Bool;

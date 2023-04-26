@@ -15,6 +15,60 @@ export const MAX_CHUNK_SIZE = 1024 * 500; // 500kb
 export const REWARDS_CHECK_INTERVAL = 60000;
 export const hashtagRegExp = /(?:\s|^)#[A-Za-z0-9\-._]+(?:\s|$)/gim;
 
+const getReverseFileExtension = (type)=> {
+  switch(Object.keys(type)[0]) {
+    case 'jpeg':
+      return  'image/jpeg';
+    case 'gif':
+      return  'image/gif'; 
+    case 'jpg':
+      return  'image/jpg';       
+    case 'png':
+      return  'image/png';
+    case 'svg':
+      return  'image/svg';
+    case 'avi':
+      return  'video/avi';
+    case 'mp4':
+      return  'video/mp4';
+    case 'aac':
+      return  'video/aac';
+    case 'wav':
+      return  'audio/wav';
+    case 'mp3':
+      return  'audio/mp3';                                                                                                              
+    default :
+    return "";
+  }
+};
+
+const getFileExtension = (type) => {
+  switch(type) {
+    case 'image/jpeg':
+      return { 'jpeg' : null };
+    case 'image/gif':
+      return { 'gif' : null };
+    case 'image/jpg':
+      return { 'jpg' : null };
+    case 'image/png':
+      return { 'png' : null };          
+    case 'image/svg':
+      return { 'svg' : null };          
+    case 'video/avi':
+      return { 'avi' : null };                            
+    case 'video/aac':
+      return { 'aac' : null };
+    case 'video/mp4':
+      return { 'mp4' : null };        
+    case 'audio/wav':
+      return { 'wav' : null };                         
+    case 'audio/mp3':
+      return { 'mp3' : null };
+    default :
+    return null;
+  }
+};
+
 export const encodeArrayBuffer = (file) => Array.from(new Uint8Array(file));
 
 export function unwrap(val){
@@ -47,49 +101,81 @@ export function getVideoInit(userId,file,caption){
 // }
 
 // Divides the file into chunks and uploads them to the canister in sequence
-async function processAndUploadChunk(videoBuffer, byteStart, videoSize, videoId, chunk) {
+async function processAndUploadChunkNat(videoBuffer, byteStart, fileSize, contentId, chunk) {
   const actor = await createBucketActor({
       canisterId: bucket
     });
 
   const videoSlice = videoBuffer.slice(
     byteStart,
-    Math.min(videoSize, byteStart + MAX_CHUNK_SIZE)
+    Math.min(fileSize, byteStart + MAX_CHUNK_SIZE)
   );
   const sliceToNat = encodeArrayBuffer(videoSlice);
-  return await actor.putContentChunk(videoId, chunk, sliceToNat);
+  return await actor.putContentChunk(contentId, chunk, sliceToNat);
 }
+
+
+
+
+async function processAndUploadChunkBlob(videoBuffer, byteStart, fileSize, contentId, chunk) {
+  const blobSlice = blob.slice(
+    byteStart,
+    Math.min(Number(fileSize), byteStart + MAX_CHUNK_SIZE),
+    blob.type
+  );
+ 
+  const bsf = await blobSlice.arrayBuffer();
+  const ba = await BackendActor.getBackendActor();
+  // console.log(fileId);
+  // console.log(chunk);
+  // console.log(fileSize);
+  // console.log(encodeArrayBuffer(bsf));
+  return ba.putFileChunks(fileId, BigInt(chunk), BigInt(fileSize), encodeArrayBuffer(bsf));
+}
+
+
+
+
+
+
+
+
+
 
 // Wraps up the previous functions into one step for the UI to trigger
 async function uploadVideo(userId, file, caption) { 
-    const actor = await createBucketActor({
-        canisterId: bucket
-      });
-      
-  const videoBuffer = (await file?.arrayBuffer()) || new ArrayBuffer(0);
+  const actor = await createBucketActor({
+      canisterId: bucket
+    });
+    
+const videoBuffer = (await file?.arrayBuffer()) || new ArrayBuffer(0);
 
-  const videoInit = getVideoInit(userId, file, caption);
-  const videoId = await actor.createContent(videoInit);
+const videoInit = getVideoInit(userId, file, caption);
+const videoId = await actor.createContent(videoInit);
 
-  let chunk = 1;
-  const thumb = generateThumbnail(file);
-  await uploadVideoPic(videoId, thumb);
+let chunk = 1;
+const thumb = generateThumbnail(file);
+await uploadVideoPic(contentId, thumb);
 
-  const putChunkPromises = [];
-  for (
-    let byteStart = 0;
-    byteStart < file.size;
-    byteStart += MAX_CHUNK_SIZE, chunk++
-  ) {
-    putChunkPromises.push(
-      processAndUploadChunk(videoBuffer, byteStart, file.size, videoId, chunk)
-    );
-  }
-
-  await Promise.all(putChunkPromises);
-
-  return await checkVidFromIC(videoId, userId);
+const putChunkPromises = [];
+for (let byteStart = 0; byteStart < file.size; byteStart += MAX_CHUNK_SIZE, chunk++) {
+  putChunkPromises.push(
+    processAndUploadChunk(videoBuffer, byteStart, file.size, contentId, chunk)
+  );
 }
+
+await Promise.all(putChunkPromises);
+
+return await checkVidFromIC(contentId, userId);
+}
+
+
+
+
+
+
+
+
 
 // This isn't Internet Computer specific, just a helper to generate an image
 // from a video file
@@ -135,6 +221,13 @@ export function generateThumbnail(videoFile) {
   });
 }
 
+
+
+
+
+
+
+
 // Stores the videoPic on the canister
 async function uploadVideoPic(videoId, file) {
     const actor = await createBucketActor({
@@ -148,6 +241,14 @@ async function uploadVideoPic(videoId, file) {
     console.error("Unable to store video thumbnail:", error);
   }
 }
+
+
+
+
+
+
+
+
 
 // Gets videoInfo from the IC after we've uploaded
 async function checkVidFromIC(videoId, userId) {
@@ -163,6 +264,14 @@ async function checkVidFromIC(videoId, userId) {
   console.log("Upload verified.");
   return resultFromCanCan;
 }
+
+
+
+
+
+
+
+
 
 // This hook exposes functions to set video data, trigger the upload, and return
 // with "success" to toggle loading states.

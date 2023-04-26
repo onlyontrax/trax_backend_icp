@@ -5,6 +5,7 @@
       "type": "motoko"
     },
     
+    
     "dyn_canisters_frontend": {
       "dependencies": [
         "dyn_canisters_backend"

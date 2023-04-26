@@ -48,33 +48,16 @@
 
         <h1>Create Artist Profile: </h1>
       
-        <label for="usernameA">Enter your username: &nbsp;</label>
-        <input id="usernameA" alt="Username" type="text" />
-            <br/>
-        <label for="displayNameA">Enter your display name: &nbsp;</label>
-        <input id="displayNameA" alt="Display Name" type="text" />
-            <br/>
+       
         <label for="principalA">Enter your principal: &nbsp;</label>
         <input id="principalA" alt="Principal" type="text" />
             <br/>
-        <label for="emailA">Enter your email address: &nbsp;</label>
+        <!-- <label for="emailA">Enter your email address: &nbsp;</label>
         <input id="emailA" alt="Email" type="text" />
             <br/>
         <label for="firstNameA">Enter your first name: &nbsp;</label>
-        <input id="firstNameA" alt="First Name" type="text" />
-            <br/>
-        <label for="lastNameA">Enter your last name: &nbsp;</label>
-        <input id="lastNameA" alt="Last Name" type="text" />
-            <br/>
-        <label for="countryA">Enter your country: &nbsp;</label>
-        <input id="countryA" alt="Country" type="text" />
-            <br/>
-        <label for="dateOfBirthA">Enter your date of birth: &nbsp;</label>
-        <input id="dateOfBirthA" alt="dob" type="number" />
-            <br/>
-        <label for="bioA">Enter your bio: &nbsp;</label>
-        <input id="bioA" alt="bio" type="text" />
-            <br/>
+        <input id="firstNameA" alt="First Name" type="text" /> -->
+            
         <button type="button" id="createA">Create canister</button>
 
 <!-- 
@@ -213,10 +196,12 @@
         completedMessage="Uploaded!"
         isLoading={uploading && !uploadingClean}
       /> -->
+      <br>
+      <h1>Upload file.</h1>
+      <br>
       <input
         id="video-upload"
         type="file"
-        accept=".mp4"
       />
       <!-- {videoFile && ( -->
         <div className="video-add-details">
@@ -233,6 +218,26 @@
             <button type="button" id="postContent" className="medium primary">
               Post
             </button>
+          </div>
+        </div>
+
+
+        <div>
+          <br>
+          <br>
+          <h1>Download file.</h1>
+          <br>
+          <div>
+            <label for="download-principal">artist principal: </label>
+            <input type="text" id="download-principal"/>
+          </div>
+          <div>
+            <label for="download-content-id">content id: </label>
+            <input type="text" id="download-content-id"/>
+          </div>
+
+          <div>
+            <button type="button" id="downloadContent" >download</button>
           </div>
         </div>
       <!-- )} -->

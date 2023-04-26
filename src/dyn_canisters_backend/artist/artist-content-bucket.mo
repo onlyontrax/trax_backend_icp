@@ -23,6 +23,7 @@ import Prim               "mo:⛔";
 import Map                "mo:stable-hash-map/Map";
 import Utils              "../utils/utils";
 import WalletUtils        "../utils/wallet.utils";
+// import Manager "canister:dyn_canisters_backend";
 // import ContentStorageBucket "./artist-bucket";
 
 
@@ -36,12 +37,13 @@ actor class ArtistContentBucket(owner: Principal) = this {
   type UserId                    = T.UserId;
   type ContentInit               = T.ContentInit;
   type ContentId                 = T.ContentId;
-  type ContentInfo               = T.ContentInfo;
+  type ContentData               = T.ContentData;
   type ChunkId                   = T.ChunkId;
   type CanisterId                = T.CanisterId;
   type ChunkData                 = T.ChunkData;
   type StatusRequest             = T.StatusRequest;
   type StatusResponse             = T.StatusResponse;
+  // type Manager = Manager.Manager;
   
   let { ihash; nhash; thash; phash; calcHash } = Map;
 
@@ -49,10 +51,14 @@ actor class ArtistContentBucket(owner: Principal) = this {
   stable var MAX_CANISTER_SIZE: Nat = 48_000_000_000; // <-- approx. 48GB
   var version: Nat = 1;
 
+
+  let limit                         = 20_000_000_000_000; // canister cycles capacity 
+  stable var CYCLE_AMOUNT : Nat     =  1_000_000_000_000; // minimum amount of cycles needed to create new canister 
+
   private let canisterUtils : CanisterUtils.CanisterUtils = CanisterUtils.CanisterUtils();
   private let walletUtils : WalletUtils.WalletUtils = WalletUtils.WalletUtils();
 
-  private var content = Map.new<ContentId, ContentInfo>(thash);
+  private var content = Map.new<ContentId, ContentData>(thash);
   private var chunksData = Map.new<ChunkId, ChunkData>(thash);
 
   stable var initialised: Bool = false;
@@ -70,7 +76,7 @@ actor class ArtistContentBucket(owner: Principal) = this {
 
 
 // #region - CREATE & UPLOAD CONTENT
-  public func createContent(i : ContentInit, fileSize: Nat) : async ?ContentId {
+  public func createContent(i : ContentInit) : async ?ContentId {
     
     let now = Time.now();
     let videoId = Principal.toText(i.userId) # "-" # i.name # "-" # (Int.toText(now));
@@ -87,20 +93,39 @@ actor class ArtistContentBucket(owner: Principal) = this {
                               caption =  i.caption;
                               chunkCount = i.chunkCount;
                               tags = i.tags;
-                              viewCount = 0;
-                              contentType = i.contentType;
+                              extension = i.extension;
+                              size = i.size
                             });
+            // await checkCyclesBalance();
            ?videoId
+           
          };
     }
   };
 
-  
+
+  // public func checkCyclesBalance () : async(){
+  //   let bal = getCurrentCycles();
+  //   Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
+  //   if(bal < CYCLE_AMOUNT){
+  //      await transferCyclesToThisCanister();
+  //   };
+  // };
+
+
+  // public func transferCyclesToThisCanister() : async (){
+  //   let self: Principal = Principal.fromActor(this);
+  //   Manager.transferCyclesToCanister(self, limit);
+
+  // };
 
   
 
-  public shared(msg) func putContentChunk(contentId : ContentId, chunkNum : Nat, chunkData : [Nat8]) : async (){
+  
+
+  public shared(msg) func putContentChunk(contentId : ContentId, chunkNum : Nat, chunkData : Blob) : async (){
       // accessCheck(msg.caller, #update, #video videoId)!;
+      // await checkCyclesBalance();
       let a = Map.put(chunksData, thash, chunkId(contentId, chunkNum), chunkData);
   };
 
@@ -110,7 +135,8 @@ actor class ArtistContentBucket(owner: Principal) = this {
   };
 
 
-  public func getContentChunk(contentId : ContentId, chunkNum : Nat) : async ?[Nat8] {
+  public func getContentChunk(contentId : ContentId, chunkNum : Nat) : async ?Blob {
+    // await checkCyclesBalance();
       Map.get(chunksData, thash, chunkId(contentId, chunkNum));
   };
 
@@ -122,8 +148,9 @@ actor class ArtistContentBucket(owner: Principal) = this {
 
 
 
-  public func getContentInfo(caller: UserId, id: ContentId) : async ?ContentInfo{
-      Map.get(content, thash, id);
+  public func getContentInfo(caller: UserId, id: ContentId) : async ?ContentData{
+    // await checkCyclesBalance();
+    Map.get(content, thash, id);
   };
 
 
