@@ -29,11 +29,13 @@ import WalletUtils        "../utils/wallet.utils";
 // import ArtistAccountBucket "artist-account-bucket";
 import IC "../ic.types";
 // import Manager "canister:dyn_canisters_backend";
+import Env "../env";
+// import Manager "../manager/manager";
 
 
 
 
- actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Principal) = this {
+ shared({caller = manager}) actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Principal) = this {
 
   let { ihash; nhash; thash; phash; calcHash } = Map;
 
@@ -46,11 +48,16 @@ import IC "../ic.types";
   type CanisterId                = T.CanisterId;
   type StatusRequest             = T.StatusRequest;
   type StatusResponse             = T.StatusResponse;
+  type ManagerId = Principal;
+
+  // var managerId: ManagerId;
   // type Manager = Manager.Manager;
   
   stable var MAX_CANISTER_SIZE: Nat =     48_000_000_000; // <-- approx. 40GB
-  stable var CYCLE_AMOUNT : Nat     =  1_000_000_000_000;
-  let limit                         = 20_000_000_000_000;
+  // stable var CYCLE_AMOUNT : Nat     =  1_000_000_000_000;
+  stable var CYCLE_AMOUNT : Nat = 100_000_000_000;
+  let maxCycleAmount = 20_000_000_000_000;
+  let limit                         = 1_000_000_000_000;
 
 
   private let ic : IC.Self = actor "aaaaa-aa";
@@ -136,6 +143,15 @@ import IC "../ic.types";
         true
       };case null false;
     };
+  };
+
+
+  public shared ({caller}) func transferFreezingThresholdCycles() : async () {
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not a manager.");
+    };
+
+    await walletUtils.transferFreezingThresholdCycles(caller);
   };
 
 
@@ -252,13 +268,16 @@ import IC "../ic.types";
 
 
   private func createStorageCanister(owner: UserId) : async ?(Principal) {
+    await checkCyclesBalance();
     Debug.print(debug_show Principal.toText(owner));
     Cycles.add(CYCLE_AMOUNT);
+
+   
 
     var canisterId: ?Principal = null;
     // let {canister_id} = await ic.create_canister({settings = null});
 
-    let b = await ArtistContentBucket.ArtistContentBucket(owner);
+    let b = await ArtistContentBucket.ArtistContentBucket(owner, manager);
     canisterId := ?(Principal.fromActor(b));
 
     switch (canisterId) {
@@ -266,6 +285,8 @@ import IC "../ic.types";
         throw Error.reject("Bucket init error");
       };
       case (?canisterId) {
+
+        
 
         let self: Principal = Principal.fromActor(this);
 
@@ -284,7 +305,7 @@ import IC "../ic.types";
       };
     };
 
-    // await checkCyclesBalance();
+     
 
     
 
@@ -292,19 +313,26 @@ import IC "../ic.types";
   };
 
 
-  // public func transferCyclesToThisCanister() : async (){
-  //   let self: Principal = Principal.fromActor(this);
-  //   Manager.transferCyclesToCanister(self, limit);
+  public func transferCyclesToThisCanister() : async (){
+    let self: Principal = Principal.fromActor(this);
+    // Manager.transferCyclesToCanister(self, limit);
 
-  // };
+    let can = actor(Principal.toText(manager)): actor { 
+            transferCycles: (CanisterId, Nat) -> async ();
+          };
+    
+    await can.transferCycles(self, limit);
 
-  // public func checkCyclesBalance () : async(){
-  //   let bal = getCurrentCycles();
-  //   Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
-  //   if(bal < CYCLE_AMOUNT){
-  //      await transferCyclesToThisCanister();
-  //   };
-  // };
+  };
+
+  public func checkCyclesBalance () : async(){
+    Debug.print("creator of this smart contract: " #debug_show manager);
+    let bal = getCurrentCycles();
+    Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
+    if(bal < CYCLE_AMOUNT){
+       await transferCyclesToThisCanister();
+    };
+  };
 
 
   public func changeCycleAmount(amount: Nat) : (){

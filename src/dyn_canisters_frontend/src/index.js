@@ -517,14 +517,15 @@ const upload = async () => {
 
 
   const fileInfo  = { // ContentInit type
-    name: Math.random().toString(36).substring(2),
+    name: fileType.name,
     createdAt: BigInt(Number(Date.now() * 1000)),
     size: BigInt(fileType.size),
     caption: "Something",
     tags: ["hiphop",  "dance", "grime"],
     chunkCount: BigInt(Number(Math.ceil(fileType.size / MAX_CHUNK_SIZE))),
     extension: fileExtension,
-    userId: Principal.fromText(userId.value)
+    userId: Principal.fromText(userId.value),
+    contentId: Math.random().toString(36).substring(2)
   };
   console.log(fileInfo)
 
@@ -534,12 +535,13 @@ const upload = async () => {
     idl: artistBucketIDL,
     canisterId: canisterId.toString()
   });
-  console.log("ACTOR: " + actor);
+  // console.log("ACTOR: " + actor);
 
   // const ba = await BackendActor.getBackendActor();
   // setValue(10);
   // const authenticated = await authClient.isAuthenticated();
   // console.log(authenticated);
+
   const createRes = await actor.createContent(fileInfo);
   console.log("Create Res[0][1]:  " + createRes[0][1]);
   console.log("Create Res[0][0]:  " + createRes[0][0]);
@@ -547,9 +549,10 @@ const upload = async () => {
   // console.log(fileId);
   // setValue(40);
   const blob = fileType.blob;
+  console.log(blob)
   const putChunkPromises = [];
   let chunk = 1;
-  for (let byteStart = 0; byteStart < blob.size; byteStart += MAX_CHUNK_SIZE, chunk++ ) {
+  for (let byteStart = 0; byteStart < fileType.size; byteStart += MAX_CHUNK_SIZE, chunk++ ) {
     putChunkPromises.push(
       processAndUploadChunk(blob, byteStart, createRes[0][0], chunk, fileType.size, createRes[0][1])
     );
@@ -612,6 +615,21 @@ const b64toBlob = (b64Data, contentType='', sliceSize=512) => {
     byteArrays.push(byteArray);
   }
   const blob = new Blob(byteArrays, { type: contentType } );
+  const url = URL.createObjectURL(blob);
+
+  let img = document.getElementById('image-download');
+
+  img.height = 100;
+  img.width = 100;
+
+  img.onload = function() {
+    URL.revokeObjectURL(img.src);     // clean-up memory
+    document.body.appendChild(img);   // add image to DOM
+  }
+  img.src = url; 
+
+  console.log(blob)
+
   return blob;
 }
 
@@ -699,12 +717,69 @@ const downloadFile = async () =>{
         chunks.push(new Uint8Array(chunk[0]).buffer);
       }
     }
-  
+    
+  console.log(chunks);
   const blob = new Blob(chunks, { type: getReverseFileExtension(contentData[0].extension)} );
   const url = URL.createObjectURL(blob);
-
   console.log(blob)
   console.log(url);
+
+  // console.log(getReverseFileExtension(contentData[0].extension).slice(0, 5));
+
+  // if(getReverseFileExtension(contentData[0].extension) == "video/mp4"){
+  //   let vid = document.getElementById('video-download');
+  //   vid.src = usableUrl.toString();
+
+  // }else if(getReverseFileExtension(contentData[0].extension).slice(0, 5) == "image"){
+  //   let img = document.getElementById('image-download');
+  //   img.src = usableUrl.toString();
+  // }
+
+  let img = document.getElementById('image-download');
+          
+            // img.src = URL.createObjectURL(blob);
+            img.height = 100;
+            img.width = 100;
+            // img.onload = function() {
+            //     URL.revokeObjectURL(this.src);
+            //   } 
+
+  // var downloadLink = document.createElement("a");
+  //       downloadLink.download = contentData[0].name;
+  //       if (window.webkitURL != null) {
+  //         downloadLink.href = window.webkitURL.createObjectURL(blob);
+  //     } else {
+  //         downloadLink.href = window.URL.createObjectURL(blob);
+  //         downloadLink.onclick = document.body.removeChild(event.target);
+  //         downloadLink.style.display = "none";
+  //         document.body.appendChild(downloadLink);
+  //     }
+  //     downloadLink.click();
+
+  // img = new Image();
+
+  img.onload = function() {
+    URL.revokeObjectURL(img.src);     // clean-up memory
+    document.body.appendChild(img);   // add image to DOM
+  }
+  img.src = url; 
+
+
+
+
+  // console.log(blob)
+  // console.log(url.toString());
+  
+  // let usableUrl = url.slice(5)
+  // console.log(usableUrl)
+  // if(getReverseFileExtension(contentData[0].extension) == "video/mp4"){
+  //   let vid = document.getElementById('video-download');
+  //   vid.src = usableUrl.toString();
+
+  // }else if(getReverseFileExtension(contentData[0].extension) == "image/png"){
+  //   let img = document.getElementById('image-download');
+  //   img.src = usableUrl.toString();
+  // }
  
 
 

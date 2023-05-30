@@ -58,6 +58,7 @@ actor Manager {
   stable var numOfFanAccounts: Nat = 0;
   stable var numOfArtistAccounts: Nat = 0;
   stable var MAX_CANISTER_SIZE: Nat = 48_000_000_000; // <-- approx. 40MB
+  // stable var CYCLE_AMOUNT : Nat = 1_000_000_000_000;
   stable var CYCLE_AMOUNT : Nat = 1_000_000_000_000;
 
 //  let fanBucket : FanBucket.FanBucket = FanBucket.FanBucket();
@@ -88,7 +89,7 @@ actor Manager {
     if (not Utils.isAdmin(caller)) {
       throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
     };
-    MAX_CANISTER_SIZE := newSize;   
+    MAX_CANISTER_SIZE := newSize;
   };
 
 
@@ -256,11 +257,22 @@ actor Manager {
     };
   };
 
+  public shared ({caller}) func transferCycles(canisterId : Principal, amount : Nat) : async () {
+    // if (not Utils.isAdmin(caller)) {
+    //   throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
+    // };
+
+    await walletUtils.transferCycles(canisterId, amount);
+  };
 
 
+  public func deleteContentCanister(canId: Principal): async(){
+    let canisterId :?Principal = ?(canId);
+    let res = await canisterUtils.deleteCanister(canisterId);
+  };
 
 
-  public func deleteCanister(user: UserId, canisterId: Principal, userType: UserType) :  async (Bool){
+  public func deleteAccountCanister(user: UserId, canisterId: Principal, userType: UserType) :  async (Bool){
     if(userType == #fan){
       switch(Map.get(fanAccountsMap, phash, user)){
         case(?fanAccount){
@@ -340,9 +352,9 @@ actor Manager {
 
 
 
-  public shared func transferCyclesToCanister(canisterId : Principal, amount : Nat) : async(){
-    await walletUtils.transferCycles(canisterId, amount);
-  };
+  // public shared func transferCyclesToCanister(canisterId : Principal, amount : Nat) : async(){
+  //   await walletUtils.transferCycles(canisterId, amount);
+  // };
 
 
 

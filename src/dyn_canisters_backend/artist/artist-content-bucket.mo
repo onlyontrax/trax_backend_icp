@@ -27,10 +27,11 @@ import WalletUtils        "../utils/wallet.utils";
 // import ContentStorageBucket "./artist-bucket";
 
 
-actor class ArtistContentBucket(owner: Principal) = this {
-  // change [Nat] to Blob for sc memory improvement
+actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
   // pull cycles from parent canister if balance is below threshold 
-  //  
+  // most efficient way to check cycles balance: either function call every time data is written into sc, or timer function call to check bal every few hours, or both
+  // 
+
 
 
 //   type ArtistAccountData         = T.ArtistAccountData;
@@ -48,12 +49,13 @@ actor class ArtistContentBucket(owner: Principal) = this {
   let { ihash; nhash; thash; phash; calcHash } = Map;
 
   stable var canisterOwner: Principal = owner;
+  stable var managerCanister: Principal = manager;
   stable var MAX_CANISTER_SIZE: Nat = 48_000_000_000; // <-- approx. 48GB
   var version: Nat = 1;
 
 
   let limit                         = 20_000_000_000_000; // canister cycles capacity 
-  stable var CYCLE_AMOUNT : Nat     =  1_000_000_000_000; // minimum amount of cycles needed to create new canister 
+  stable var CYCLE_AMOUNT : Nat     =  100_000_000_000; // minimum amount of cycles needed to create new canister 
 
   private let canisterUtils : CanisterUtils.CanisterUtils = CanisterUtils.CanisterUtils();
   private let walletUtils : WalletUtils.WalletUtils = WalletUtils.WalletUtils();
@@ -63,10 +65,7 @@ actor class ArtistContentBucket(owner: Principal) = this {
 
   stable var initialised: Bool = false;
 
-  public func deleteCanister(user: Principal): async(){
-    let canisterId :?Principal = ?(Principal.fromActor(this));
-    let res = await canisterUtils.deleteCanister(canisterId);
-  };
+  
 
   public shared({caller})func changeMaxCanisterSize(value: Nat) : (){
     if (not Utils.isAdmin(caller)) {
@@ -104,20 +103,26 @@ actor class ArtistContentBucket(owner: Principal) = this {
   };
 
 
-  // public func checkCyclesBalance () : async(){
-  //   let bal = getCurrentCycles();
-  //   Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
-  //   if(bal < CYCLE_AMOUNT){
-  //      await transferCyclesToThisCanister();
-  //   };
-  // };
+  public func transferCyclesToThisCanister() : async (){
+    let self: Principal = Principal.fromActor(this);
+    // Manager.transferCyclesToCanister(self, limit);
 
+    let can = actor(Principal.toText(managerCanister)): actor { 
+            transferCycles: (CanisterId, Nat) -> async ();
+          };
+    
+    await can.transferCycles(self, limit);
 
-  // public func transferCyclesToThisCanister() : async (){
-  //   let self: Principal = Principal.fromActor(this);
-  //   Manager.transferCyclesToCanister(self, limit);
+  };
 
-  // };
+  public func checkCyclesBalance () : async(){
+    Debug.print("creator of this smart contract: " #debug_show manager);
+    let bal = getCurrentCycles();
+    Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
+    if(bal < CYCLE_AMOUNT){
+       await transferCyclesToThisCanister();
+    };
+  };
 
   
 
@@ -167,6 +172,14 @@ actor class ArtistContentBucket(owner: Principal) = this {
 	// 		return false;
 	// 	};
 	// };
+
+  public shared ({caller}) func transferFreezingThresholdCycles() : async () {
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not a manager.");
+    };
+
+    await walletUtils.transferFreezingThresholdCycles(caller);
+  };
 
 
 

@@ -48,6 +48,7 @@ module Types {
       chunkCount: Nat;
       extension: FileExtension;
       size: Nat;
+      contentId: Text;
     };
 
     public type ContentData = {
