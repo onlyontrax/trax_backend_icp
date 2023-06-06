@@ -16,7 +16,7 @@ module {
     hasPrivilege(caller, Env.manager);
   };
 
-  private func hasPrivilege(caller : Principal, privileges : [Text]) : Bool {
+  private func hasPrivilege(caller : Principal, privileges : [Text]) : Bool { // rename function header from admin 
     func toPrincipal(entry : Text) : Principal {
       Principal.fromText(entry);
     };

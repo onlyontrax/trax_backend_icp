@@ -76,7 +76,8 @@ actor Manager {
   public query func getCanisterArtist(artist: Principal) : async (?Principal){   Map.get(artistAccountsMap, phash, artist);    };
 
 
-  public shared({caller}) func changeCycleAmount(amount: Nat) : (){  
+  public shared({caller}) func changeCycleAmount(amount: Nat) : (){  // utils based 
+  // only manager check
     if (not Utils.isAdmin(caller)) {
       throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
     };
@@ -85,7 +86,8 @@ actor Manager {
 
 
 
-  public shared({caller}) func changeCanisterSize(newSize: Nat) : (){    
+  public shared({caller}) func changeCanisterSize(newSize: Nat) : (){    // utils based
+  // only manager check
     if (not Utils.isAdmin(caller)) {
       throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
     };
@@ -95,6 +97,7 @@ actor Manager {
 
 
   public query func getOwnerOfFanCanister(canisterId: Principal) : async (?UserId){ 
+    // only manager check
     for((key, value) in Map.entries(fanAccountsMap)){
       var fan: ?UserId = ?key;
       var canID = value;
@@ -108,6 +111,7 @@ actor Manager {
 
 
   public query func getOwnerOfArtistCanister(canisterId: Principal) : async (?UserId){ 
+    // only manager check
     for((key, value) in Map.entries(artistAccountsMap)){
       var artist: ?UserId = ?key;
       var canID = value;
@@ -121,6 +125,7 @@ actor Manager {
 
 
   public func transferOwnershipFan(currentOwner: Principal, newOwner: Principal) : async (){
+    // only manager or fan check
     switch(Map.get(fanAccountsMap, phash, currentOwner)){
       case(?canisterId){
         Map.delete(fanAccountsMap, phash, currentOwner);
@@ -133,6 +138,7 @@ actor Manager {
 
 
   public shared({caller}) func transferOwnershipArtist(currentOwner: Principal, newOwner: Principal) : async (){
+    // only manager or artist check
     assert(currentOwner == caller);
     switch(Map.get(artistAccountsMap, phash, currentOwner)){
       case(?canisterId){
@@ -144,13 +150,14 @@ actor Manager {
 
 
   public func createProfileFan(accountData: FanAccountData) : async (Principal){
+    // only manager or artist check
     await createCanister(accountData.userPrincipal, #fan, ?accountData, null);
   };  
 
 
 
-
   public func createProfileArtist(accountData: ArtistAccountData) : async (Principal){
+    // only manager or artist check 
     await createCanister(accountData.userPrincipal, #artist, null, ?accountData);
   };  
 

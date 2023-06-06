@@ -86,6 +86,16 @@ import Env "../env";
     Map.get(contentToCanister, thash, contentId);
   };
 
+  public query func getEntriesOfCanisterToContent() : async [(CanisterId, ContentId)]{
+    var res = Buffer.Buffer<(CanisterId, ContentId)>(2);
+    for((key, value) in Map.entries(contentToCanister)){
+                var contentId : ContentId = key;
+                var canisterId : CanisterId = value;
+                res.add(canisterId, contentId);
+            };       
+    return Buffer.toArray(res);
+  };
+
 
 
   public query func getAllContentCanisters() : async [CanisterId]{
@@ -192,6 +202,7 @@ import Env "../env";
 
 
   public  func createContent(i : ContentInit) : async ?(ContentId, Principal) {
+    // implement checks: artist-principal or manager identity 
     // assert();
     // if(caller != i.userId){
     //   throw Error.reject("caller is not the publisher");
@@ -215,10 +226,10 @@ import Env "../env";
           if(availableMemory > i.size){ // replace hardcoded val with size of ingress message
 
           let can = actor(Principal.toText(canisters)): actor { 
-            createContent: (ContentInit, Nat) -> async (?ContentId);
+            createContent: (ContentInit) -> async (?ContentId);
           };
 
-          switch(await can.createContent(i, i.size)){
+          switch(await can.createContent(i)){
             case(?contentId){ 
               let a = Map.put(contentToCanister, thash, contentId, canisters);
               uploaded := true;
@@ -242,9 +253,9 @@ import Env "../env";
         case(?canID){
           B.add(contentCanisterIds, canID);
           let newCan = actor(Principal.toText(canID)): actor { 
-            createContent: (ContentInit, Nat) -> async (?ContentId);
+            createContent: (ContentInit) -> async (?ContentId);
           };
-          switch(await newCan.createContent(i, i.size)){
+          switch(await newCan.createContent(i)){
             case(?contentId){ 
               let a = Map.put(contentToCanister, thash, contentId, canID);
               uploaded := true;

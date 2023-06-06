@@ -15,9 +15,9 @@ export const createBucketActor = async ({ idl, canisterId }) => {
   // console.log(idlFactory)
   const agent = new HttpAgent();
 
-  if (process.env.NODE_ENV !== 'production') {
+  // if (process.env.NODE_ENV !== 'production') {
     await agent.fetchRootKey();
-  }
+  // }
 
   return Actor.createActor(idl, {
     agent,
@@ -512,10 +512,10 @@ const upload = async () => {
   const userId = document.getElementById('id-artist-upload');
   console.log(typeof userId.value);
   const canisterId = await dyn_canisters_backend.getCanisterArtist(Principal.fromText(userId.value));
-  console.log("artist-content-bucket canisterID: " + canisterId);
+  console.log("artist-account-bucket canisterID: " + canisterId);
   
 
-
+  var randomContentID = Math.random().toString(36).substring(2);
   const fileInfo  = { // ContentInit type
     name: fileType.name,
     createdAt: BigInt(Number(Date.now() * 1000)),
@@ -525,8 +525,20 @@ const upload = async () => {
     chunkCount: BigInt(Number(Math.ceil(fileType.size / MAX_CHUNK_SIZE))),
     extension: fileExtension,
     userId: Principal.fromText(userId.value),
-    contentId: Math.random().toString(36).substring(2)
+    contentId: randomContentID,
   };
+
+  // const thumbnail = {
+  //   contentId: randomContentID,
+  //   userId: Principal.fromText(userId.value),
+  //   name: fileType.name + " thumbnail",
+  //     chunkCount: BigInt(Number(Math.ceil(fileType.size / MAX_CHUNK_SIZE))),
+  //     extension: fileExtension,
+  //     size: Nat;
+  //     file: '',
+    
+  //   size: 
+  // }
   console.log(fileInfo)
 
   
@@ -535,6 +547,9 @@ const upload = async () => {
     idl: artistBucketIDL,
     canisterId: canisterId.toString()
   });
+
+  let allContentCanisters = await actor.getAllContentCanisters();
+  console.log("allContentCanisters: ", allContentCanisters)
   // console.log("ACTOR: " + actor);
 
   // const ba = await BackendActor.getBackendActor();
@@ -566,8 +581,8 @@ const upload = async () => {
   // updateDeps();
   // setFileData('Drag and drop a file or select add File');
   const t1 = performance.now();
+  console.log("processAndUploadChunk finish!!")
   console.log("Upload took " + (t1 - t0) / 1000 + " seconds.")
-  
 }
 
 const encodeArrayBuffer = (file) => Array.from(new Uint8Array(file));
@@ -586,12 +601,13 @@ const processAndUploadChunk = async ( blob, byteStart, fileId, chunk, fileSize, 
     idl: artistContentBucketIDL,
     canisterId: canisterId.toString()
   });
-  console.log("ACTOR: " + actor);
+  // console.log("ACTOR: " + actor);
+  console.log("chunk: " + chunk);
   // console.log(fileId);
   // console.log(chunk);
   // console.log(fileSize);
   // console.log(encodeArrayBuffer(bsf));
-  console.log("processAndUploadChunk finish!!")
+  // console.log("processAndUploadChunk finish!!")
   return actor.putContentChunk(fileId, BigInt(chunk), encodeArrayBuffer(bsf));
 }
 
@@ -685,8 +701,12 @@ const handleFileChange = (event) => {
 const downloadFile = async () =>{
   var userPrincipal = document.getElementById('download-principal');
   var contentId = document.getElementById('download-content-id');
+  // var canIdContent = document.getElementById('download-canister-id');
+  console.log(contentId.value);
 
   let artistAccountCanister = await dyn_canisters_backend.getCanisterArtist(Principal.fromText(userPrincipal.value));
+
+  console.log(artistAccountCanister.toString());
 
   const accountBucket = await createBucketActor({
     idl: artistBucketIDL,
@@ -696,12 +716,20 @@ const downloadFile = async () =>{
   console.log("artistAccountCanister: "+artistAccountCanister.toString())
 
   var artistContentCanister = await accountBucket.getCanisterOfContent(contentId.value);
-  console.log("artistContentCanister: "+artistContentCanister.toString())
+  
+  
+  console.log("artistContentCanister: ", artistContentCanister.toString())
 
   const contentBucket = await createBucketActor({
     idl: artistContentBucketIDL,
     canisterId: artistContentCanister.toString()
   });
+
+  var allContentCanistersAndIDs = await accountBucket.getEntriesOfCanisterToContent();
+  for(let i = 0; i < allContentCanistersAndIDs.length; i++){
+    console.log("allContentCanistersAndIDs: ", allContentCanistersAndIDs[i].toString());
+  }
+  console.log("allContentCanistersAndIDs: ", allContentCanistersAndIDs)
 
 
   var contentData = await contentBucket.getContentInfo(Principal.fromText(userPrincipal.value), contentId.value);
@@ -712,7 +740,7 @@ const downloadFile = async () =>{
 
   var chunks = [];
     for (let i = 1; i <= Number(contentData[0].chunkCount); i++) {
-      const chunk = await contentBucket.getContentChunk(contentId.value, contentData[0].chunkCount);
+      const chunk = await contentBucket.getContentChunk(contentId.value, BigInt(i));
       if (chunk[0]) {
         chunks.push(new Uint8Array(chunk[0]).buffer);
       }
@@ -744,17 +772,17 @@ const downloadFile = async () =>{
             //     URL.revokeObjectURL(this.src);
             //   } 
 
-  // var downloadLink = document.createElement("a");
-  //       downloadLink.download = contentData[0].name;
-  //       if (window.webkitURL != null) {
-  //         downloadLink.href = window.webkitURL.createObjectURL(blob);
-  //     } else {
-  //         downloadLink.href = window.URL.createObjectURL(blob);
-  //         downloadLink.onclick = document.body.removeChild(event.target);
-  //         downloadLink.style.display = "none";
-  //         document.body.appendChild(downloadLink);
-  //     }
-  //     downloadLink.click();
+  var downloadLink = document.createElement("a");
+        downloadLink.download = contentData[0].name;
+        if (window.webkitURL != null) {
+          downloadLink.href = window.webkitURL.createObjectURL(blob);
+      } else {
+          downloadLink.href = window.URL.createObjectURL(blob);
+          downloadLink.onclick = document.body.removeChild(event.target);
+          downloadLink.style.display = "none";
+          document.body.appendChild(downloadLink);
+      }
+      downloadLink.click();
 
   // img = new Image();
 

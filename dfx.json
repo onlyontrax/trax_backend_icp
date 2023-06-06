@@ -4,7 +4,7 @@
       "main": "src/dyn_canisters_backend/manager/manager.mo",
       "type": "motoko"
     },
-
+    
    
 
    
@@ -31,5 +31,6 @@
       "packtool": "vessel sources"
     }
   },
+
   "version": 1
 }

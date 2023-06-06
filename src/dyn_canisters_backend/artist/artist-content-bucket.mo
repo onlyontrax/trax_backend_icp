@@ -43,7 +43,9 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
   type CanisterId                = T.CanisterId;
   type ChunkData                 = T.ChunkData;
   type StatusRequest             = T.StatusRequest;
-  type StatusResponse             = T.StatusResponse;
+  type StatusResponse            = T.StatusResponse;
+  type Thumbnail                 = T.Thumbnail;
+  type Trailer                   = T.Trailer;
   // type Manager = Manager.Manager;
   
   let { ihash; nhash; thash; phash; calcHash } = Map;
@@ -78,13 +80,14 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
   public func createContent(i : ContentInit) : async ?ContentId {
     
     let now = Time.now();
-    let videoId = Principal.toText(i.userId) # "-" # i.name # "-" # (Int.toText(now));
-    switch (Map.get(content, thash, videoId)) {
+    // let videoId = Principal.toText(i.userId) # "-" # i.name # "-" # (Int.toText(now));
+    switch (Map.get(content, thash, i.contentId)) {
     case (?_) { throw Error.reject("Content ID already taken")};
     case null { 
-           let a = Map.put(content, thash, videoId,
+      
+           let a = Map.put(content, thash, i.contentId,
                             {
-                              contentId = videoId;
+                              contentId = i.contentId;
                               userId = i.userId;
                               name = i.name;
                               createdAt = i.createdAt;
@@ -93,10 +96,10 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
                               chunkCount = i.chunkCount;
                               tags = i.tags;
                               extension = i.extension;
-                              size = i.size
+                              size = i.size;
                             });
             // await checkCyclesBalance();
-           ?videoId
+           ?i.contentId
            
          };
     }
@@ -112,7 +115,6 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
           };
     
     await can.transferCycles(self, limit);
-
   };
 
   public func checkCyclesBalance () : async(){

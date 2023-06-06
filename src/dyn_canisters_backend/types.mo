@@ -22,7 +22,7 @@ module Types {
     public type ProfilePhoto = Blob; // encoded as a PNG file
     public type CoverPhoto = Blob;
 
-    public type Thumbnail = Blob; // encoded as a PNG file
+    // public type Thumbnail = Blob; // encoded as a PNG file
     public type ChunkData = Blob; // encoded as ???
 
     public type FileExtension = {
@@ -49,6 +49,22 @@ module Types {
       extension: FileExtension;
       size: Nat;
       contentId: Text;
+      // thumbnail: ?Thumbnail;
+      // trailer: ?Trailer;
+    };
+
+    public type Thumbnail = {
+      name: Text;
+      extension: FileExtension;
+      size: Nat;
+      file: ?Blob;
+    };
+    public type Trailer = {
+      name: Text;
+      chunkCount: Nat;
+      extension: FileExtension;
+      size: Nat;
+      file: ?Blob;
     };
 
     public type ContentData = {
@@ -83,7 +99,7 @@ module Types {
         // coverPhoto: ?CoverPhoto;
     };
 
-    public type Role = {
+    public type Role = { // ADD ROLES TO LOGIC 
       // caller is a fan
       #fan;
       // caller is the admin
