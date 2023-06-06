@@ -520,7 +520,7 @@ const upload = async () => {
     name: fileType.name,
     createdAt: BigInt(Number(Date.now() * 1000)),
     size: BigInt(fileType.size),
-    caption: "Something",
+    description: "Something",
     tags: ["hiphop",  "dance", "grime"],
     chunkCount: BigInt(Number(Math.ceil(fileType.size / MAX_CHUNK_SIZE))),
     extension: fileExtension,

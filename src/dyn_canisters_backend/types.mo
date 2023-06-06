@@ -43,7 +43,7 @@ module Types {
       userId : UserId;
       name: Text;
       createdAt : Timestamp;
-      caption: Text;
+      description: Text;
       tags: [Text];
       chunkCount: Nat;
       extension: FileExtension;
@@ -72,7 +72,7 @@ module Types {
       userId : UserId;
       createdAt : Timestamp;
       uploadedAt : Timestamp;
-      caption: Text;
+      description: Text;
       tags: [Text];
       name: Text;
       chunkCount: Nat;

@@ -35,7 +35,7 @@ import Env "../env";
 
 
 
- shared({caller = manager}) actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Principal) = this {
+ shared({caller = managerCanister}) actor class ArtistBucket(accountInfo: ?T.ArtistAccountData, artistAccount: Principal) = this {
 
   let { ihash; nhash; thash; phash; calcHash } = Map;
 
@@ -49,15 +49,11 @@ import Env "../env";
   type StatusRequest             = T.StatusRequest;
   type StatusResponse             = T.StatusResponse;
   type ManagerId = Principal;
-
-  // var managerId: ManagerId;
-  // type Manager = Manager.Manager;
   
   stable var MAX_CANISTER_SIZE: Nat =     48_000_000_000; // <-- approx. 40GB
-  // stable var CYCLE_AMOUNT : Nat     =  1_000_000_000_000;
-  stable var CYCLE_AMOUNT : Nat = 100_000_000_000;
-  let maxCycleAmount = 20_000_000_000_000;
-  let limit                         = 1_000_000_000_000;
+  stable var CYCLE_AMOUNT : Nat     =    100_000_000_000;
+  let maxCycleAmount                = 20_000_000_000_000;
+  let top_up_amount                 = 10_000_000_000_000;
 
 
   private let ic : IC.Self = actor "aaaaa-aa";
@@ -203,48 +199,34 @@ import Env "../env";
 
   public  func createContent(i : ContentInit) : async ?(ContentId, Principal) {
     // implement checks: artist-principal or manager identity 
-    // assert();
-    // if(caller != i.userId){
-    //   throw Error.reject("caller is not the publisher");
-    // };
-
-    // var canIdToReturn : ?Principal;
-    // check if there is free space in current canister 
-    // let index : Nat = contentCanisterIds.size();
-    // let currCanID = contentCanisterIds.get(index);
 
     var uploaded : Bool = false;
     for(canisters in B.vals(contentCanisterIds)){
       Debug.print("canister: " # debug_show canisters);
 
-      // Debug.print("currCanID: " #debug_show currCanID);
-
       let availableMemory: ?Nat = await getAvailableMemoryCanister(canisters);
 
       switch(await getAvailableMemoryCanister(canisters)){
         case(?availableMemory){
-          if(availableMemory > i.size){ // replace hardcoded val with size of ingress message
+          if(availableMemory > i.size){
 
-          let can = actor(Principal.toText(canisters)): actor { 
-            createContent: (ContentInit) -> async (?ContentId);
-          };
-
-          switch(await can.createContent(i)){
-            case(?contentId){ 
-              let a = Map.put(contentToCanister, thash, contentId, canisters);
-              uploaded := true;
-              return ?(contentId, canisters);
+            let can = actor(Principal.toText(canisters)): actor { 
+              createContent: (ContentInit) -> async (?ContentId);
             };
-            case null { 
-              return null
+
+            switch(await can.createContent(i)){
+              case(?contentId){ 
+                let a = Map.put(contentToCanister, thash, contentId, canisters);
+                uploaded := true;
+                return ?(contentId, canisters);
+              };
+              case null { 
+                return null
+              };
             };
           };
         };
-
-        };
-        case null { 
-          return null
-        };
+        case null return null;
       };
     };
 
@@ -265,12 +247,8 @@ import Env "../env";
               return null
             };
           };
-
         };
-        case null {
-          return null;
-        };
-
+        case null return null;
       }
     }else{
       return null;
@@ -283,12 +261,9 @@ import Env "../env";
     Debug.print(debug_show Principal.toText(owner));
     Cycles.add(CYCLE_AMOUNT);
 
-   
-
     var canisterId: ?Principal = null;
-    // let {canister_id} = await ic.create_canister({settings = null});
 
-    let b = await ArtistContentBucket.ArtistContentBucket(owner, manager);
+    let b = await ArtistContentBucket.ArtistContentBucket(owner, managerCanister);
     canisterId := ?(Principal.fromActor(b));
 
     switch (canisterId) {
@@ -296,8 +271,6 @@ import Env "../env";
         throw Error.reject("Bucket init error");
       };
       case (?canisterId) {
-
-        
 
         let self: Principal = Principal.fromActor(this);
 
@@ -315,11 +288,6 @@ import Env "../env";
           }}));
       };
     };
-
-     
-
-    
-
     return canisterId;
   };
 
@@ -328,16 +296,15 @@ import Env "../env";
     let self: Principal = Principal.fromActor(this);
     // Manager.transferCyclesToCanister(self, limit);
 
-    let can = actor(Principal.toText(manager)): actor { 
+    let can = actor(Principal.toText(managerCanister)): actor { 
             transferCycles: (CanisterId, Nat) -> async ();
           };
-    
-    await can.transferCycles(self, limit);
-
+    let _ = Cycles.accept(top_up_amount);
+    await can.transferCycles(self, top_up_amount);
   };
 
   public func checkCyclesBalance () : async(){
-    Debug.print("creator of this smart contract: " #debug_show manager);
+    Debug.print("creator of this smart contract: " #debug_show managerCanister);
     let bal = getCurrentCycles();
     Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
     if(bal < CYCLE_AMOUNT){
@@ -427,7 +394,7 @@ import Env "../env";
 
   public func wallet_receive() : async { accepted: Nat64 } {
     let available = Cycles.available();
-    let accepted = Cycles.accept(Nat.min(available, limit));
+    let accepted = Cycles.accept(Nat.min(available, top_up_amount));
     { accepted = Nat64.fromNat(accepted) };
   };
 

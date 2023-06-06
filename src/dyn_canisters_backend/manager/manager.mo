@@ -150,14 +150,14 @@ actor Manager {
 
 
   public func createProfileFan(accountData: FanAccountData) : async (Principal){
-    // only manager or artist check
+    // only manager
     await createCanister(accountData.userPrincipal, #fan, ?accountData, null);
   };  
 
 
 
   public func createProfileArtist(accountData: ArtistAccountData) : async (Principal){
-    // only manager or artist check 
+    // only manager 
     await createCanister(accountData.userPrincipal, #artist, null, ?accountData);
   };  
 
@@ -165,7 +165,7 @@ actor Manager {
 
 
   private func createCanister(userID: Principal, userType: UserType, accountDataFan: ?FanAccountData, accountDataArtist: ?ArtistAccountData): async (Principal) {
-    // assert((accountDataArtist != null) && (accountDataFan != null));
+    
     Debug.print(debug_show Principal.toText(userID));
     // let bal = getCurrentCycles();
     
@@ -265,6 +265,8 @@ actor Manager {
   };
 
   public shared ({caller}) func transferCycles(canisterId : Principal, amount : Nat) : async () {
+    // only manager or artist check
+    
     // if (not Utils.isAdmin(caller)) {
     //   throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
     // };
@@ -280,6 +282,7 @@ actor Manager {
 
 
   public func deleteAccountCanister(user: UserId, canisterId: Principal, userType: UserType) :  async (Bool){
+    // only manager check
     if(userType == #fan){
       switch(Map.get(fanAccountsMap, phash, user)){
         case(?fanAccount){

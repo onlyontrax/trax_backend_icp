@@ -23,11 +23,11 @@ module {
 
     let principals : [Principal] = Array.map(privileges, toPrincipal);
 
-    func filterAdmin(admin : Principal) : Bool {
+    func filter(admin : Principal) : Bool {
       admin == caller;
     };
 
-    let admin : ?Principal = Array.find(principals, filterAdmin);
+    let admin : ?Principal = Array.find(principals, filter);
 
     switch (admin) {
       case (null) {
