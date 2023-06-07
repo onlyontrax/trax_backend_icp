@@ -1,36 +1,32 @@
-import Cycles "mo:base/ExperimentalCycles";
-import Principal "mo:base/Principal";
-import Error "mo:base/Error";
-import Nat "mo:base/Nat";
-import Debug "mo:base/Debug";
-import Text "mo:base/Text";
-import T          "../types";
-import Hash       "mo:base/Hash";
-import Nat32      "mo:base/Nat32";
-import Nat64      "mo:base/Nat64";
-import Iter       "mo:base/Iter";
-import Float      "mo:base/Float";
-import Time       "mo:base/Time";
-import Int        "mo:base/Int";
-import Result     "mo:base/Result";
-import Blob       "mo:base/Blob";
-import Array      "mo:base/Array";
-import Buffer     "mo:base/Buffer";
-import Trie       "mo:base/Trie";
-import TrieMap    "mo:base/TrieMap";
-import CanisterUtils  "../utils/canister.utils";
-import Prim "mo:⛔";
-import Map  "mo:stable-hash-map/Map";
-// import ContentStorageBucket "./artist-bucket";
-import ArtistContentBucket "./artist-content-bucket";
-import B "mo:stable-buffer/StableBuffer";
-import Utils              "../utils/utils";
-import WalletUtils        "../utils/wallet.utils";
-// import ArtistAccountBucket "artist-account-bucket";
-import IC "../ic.types";
-// import Manager "canister:dyn_canisters_backend";
-import Env "../env";
-// import Manager "../manager/manager";
+import Cycles               "mo:base/ExperimentalCycles";
+import Principal            "mo:base/Principal";
+import Error                "mo:base/Error";
+import Nat                  "mo:base/Nat";
+import Debug                "mo:base/Debug";
+import Text                 "mo:base/Text";
+import T                    "../types";
+import Hash                 "mo:base/Hash";
+import Nat32                "mo:base/Nat32";
+import Nat64                "mo:base/Nat64";
+import Iter                 "mo:base/Iter";
+import Float                "mo:base/Float";
+import Time                 "mo:base/Time";
+import Int                  "mo:base/Int";
+import Result               "mo:base/Result";
+import Blob                 "mo:base/Blob";
+import Array                "mo:base/Array";
+import Buffer               "mo:base/Buffer";
+import Trie                 "mo:base/Trie";
+import TrieMap              "mo:base/TrieMap";
+import CanisterUtils        "../utils/canister.utils";
+import Prim                 "mo:⛔";
+import Map                  "mo:stable-hash-map/Map";
+import ArtistContentBucket  "./artist-content-bucket";
+import B                    "mo:stable-buffer/StableBuffer";
+import Utils                "../utils/utils";
+import WalletUtils          "../utils/wallet.utils";
+import IC                   "../ic.types";
+import Env                  "../env";
 
 
 
@@ -57,10 +53,8 @@ import Env "../env";
 
 
   private let ic : IC.Self = actor "aaaaa-aa";
-
   stable var VERSION: Nat = 1;
   stable var initialised: Bool = false;
-
   stable var owner: Principal = artistAccount;
 
   private let walletUtils : WalletUtils.WalletUtils = WalletUtils.WalletUtils();
@@ -73,63 +67,7 @@ import Env "../env";
 
 
 
-
-
-
-  public shared({caller}) func getCanisterOfContent(contentId: ContentId) : async ?(CanisterId){
-    assert(caller == owner or Utils.isManager(caller));
-    Map.get(contentToCanister, thash, contentId);
-  };
-
-
-
-  public shared({caller}) func getEntriesOfCanisterToContent() : async [(CanisterId, ContentId)]{
-    assert(caller == owner or Utils.isManager(caller));
-    var res = Buffer.Buffer<(CanisterId, ContentId)>(2);
-    for((key, value) in Map.entries(contentToCanister)){
-                var contentId : ContentId = key;
-                var canisterId : CanisterId = value;
-                res.add(canisterId, contentId);
-            };       
-    return Buffer.toArray(res);
-  };
-
-
-
-  public shared({caller}) func getAllContentCanisters() : async [CanisterId]{
-    assert(caller == owner or Utils.isManager(caller));
-    B.toArray(contentCanisterIds);
-  };
-
-
-
-  public func getAvailableMemoryCanister(canisterId: Principal) : async ?Nat{
-    let can = actor(Principal.toText(canisterId)): actor { 
-        getStatus: (?StatusRequest) -> async ?StatusResponse;
-    };
-
-    let request : StatusRequest = {
-        cycles: Bool = false;
-        heap_memory_size: Bool = false; 
-        memory_size: Bool = true;
-    };
-    
-    switch(await can.getStatus(?request)){
-      case(?status){
-        switch(status.memory_size){
-          case(?memSize){
-            let availableMemory: Nat = MAX_CANISTER_SIZE - memSize;
-            return ?availableMemory;
-          };
-          case null null;
-        };
-      };
-      case null null;
-    };
-  };
-
-
-
+// #region - CREATE CONTENT CANISTERS
   public func initCanister() :  async(Bool) { // Initialise new cansiter. This is called only once after the account has been created. I
     assert(initialised == false);
     switch(accountInfo){
@@ -138,58 +76,6 @@ import Env "../env";
         initialised := true;
         return true;
       };case null return false;
-    };
-  };
-
-
-
-  public shared({caller}) func updateProfileInfo( info: ArtistAccountData) : async (Bool){
-    assert(caller == owner or Utils.isManager(caller));
-    switch(Map.get(artistData, phash, caller)){
-      case(?exists){
-        var update = Map.replace(artistData, phash, caller, info);
-        true
-      };case null false;
-    };
-  };
-
-
-
-  public shared ({caller}) func transferFreezingThresholdCycles() : async () {
-    if (not Utils.isManager(caller)) {
-      throw Error.reject("Unauthorized access. Caller is not a manager.");
-    };
-    await walletUtils.transferFreezingThresholdCycles(caller);
-  };
-
-
-
-  public shared({caller}) func getProfileInfo(user: UserId) : async (?ArtistAccountData){
-    assert(caller == owner or Utils.isManager(caller));
-    Map.get(artistData, phash, user);
-  };
-
-
-
-  public shared({caller}) func deleteAccount(user: Principal): async(){
-    assert(caller == owner or Utils.isManager(caller));
-    let canisterId :?Principal = ?(Principal.fromActor(this));
-    let res = await canisterUtils.deleteCanister(canisterId);
-  };
-
-
-
-  public shared({caller}) func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
-    assert(caller == owner or Utils.isManager(caller));
-    switch(Map.get(contentToCanister, thash, contentId)){
-      case(?canID){
-        let can = actor(Principal.toText(canID)): actor { 
-          removeContent: (ContentId, Nat) -> async ();
-        };
-        await can.removeContent(contentId, chunkNum);
-        let a = Map.remove(contentToCanister, thash, contentId);
-      };
-      case null { };
     };
   };
   
@@ -292,6 +178,105 @@ import Env "../env";
 
 
 
+  public shared({caller}) func getProfileInfo(user: UserId) : async (?ArtistAccountData){
+    assert(caller == owner or Utils.isManager(caller));
+    Map.get(artistData, phash, user);
+  };
+
+
+
+  public shared({caller}) func updateProfileInfo( info: ArtistAccountData) : async (Bool){
+    assert(caller == owner or Utils.isManager(caller));
+    switch(Map.get(artistData, phash, caller)){
+      case(?exists){
+        var update = Map.replace(artistData, phash, caller, info);
+        true
+      };case null false;
+    };
+  };
+
+
+
+  public shared({caller}) func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
+    assert(caller == owner or Utils.isManager(caller));
+    switch(Map.get(contentToCanister, thash, contentId)){
+      case(?canID){
+        let can = actor(Principal.toText(canID)): actor { 
+          removeContent: (ContentId, Nat) -> async ();
+        };
+        await can.removeContent(contentId, chunkNum);
+        let a = Map.remove(contentToCanister, thash, contentId);
+      };
+      case null { };
+    };
+  };
+
+
+
+  public shared({caller}) func getCanisterOfContent(contentId: ContentId) : async ?(CanisterId){
+    assert(caller == owner or Utils.isManager(caller));
+    Map.get(contentToCanister, thash, contentId);
+  };
+
+
+
+  public shared({caller}) func getEntriesOfCanisterToContent() : async [(CanisterId, ContentId)]{
+    assert(caller == owner or Utils.isManager(caller));
+    var res = Buffer.Buffer<(CanisterId, ContentId)>(2);
+    for((key, value) in Map.entries(contentToCanister)){
+      var contentId : ContentId = key;
+      var canisterId : CanisterId = value;
+      res.add(canisterId, contentId);
+    };       
+    return Buffer.toArray(res);
+  };
+
+
+
+  public shared({caller}) func getAllContentCanisters() : async [CanisterId]{
+    assert(caller == owner or Utils.isManager(caller));
+    B.toArray(contentCanisterIds);
+  };
+// #endregion
+
+
+
+
+
+
+
+
+
+
+
+// #region - UTILS
+  private func getAvailableMemoryCanister(canisterId: Principal) : async ?Nat{
+    let can = actor(Principal.toText(canisterId)): actor { 
+        getStatus: (?StatusRequest) -> async ?StatusResponse;
+    };
+
+    let request : StatusRequest = {
+        cycles: Bool = false;
+        heap_memory_size: Bool = false; 
+        memory_size: Bool = true;
+    };
+    
+    switch(await can.getStatus(?request)){
+      case(?status){
+        switch(status.memory_size){
+          case(?memSize){
+            let availableMemory: Nat = MAX_CANISTER_SIZE - memSize;
+            return ?availableMemory;
+          };
+          case null null;
+        };
+      };
+      case null null;
+    };
+  };
+
+
+
   public shared({caller}) func checkCyclesBalance () : async(){
     assert(caller == owner or Utils.isManager(caller));
     Debug.print("creator of this smart contract: " #debug_show managerCanister);
@@ -378,29 +363,44 @@ import Env "../env";
 
 
 
-  public func wallet_receive() : async { accepted: Nat64 } {
+  private func wallet_receive() : async { accepted: Nat64 } {
     let available = Cycles.available();
     let accepted = Cycles.accept(Nat.min(available, top_up_amount));
     { accepted = Nat64.fromNat(accepted) };
   };
 
 
-
-  public shared func wallet_send(wallet_send: shared () -> async { accepted: Nat }, amount : Nat) : async { accepted: Nat } {// Signature of the wallet recieve function in the calling canister
-    Cycles.add(amount);
-    let l = await wallet_send();
-    { accepted = amount };
-  };
-
-
-
-  public query func getPrincipalThis() :  async (Principal){
+  public shared({caller}) func getPrincipalThis() :  async (Principal){
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not a manager.");
+    };
     Principal.fromActor(this);
   };
 
+  public shared({caller}) func deleteAccount(user: Principal): async(){
+    assert(caller == owner or Utils.isManager(caller));
+    let canisterId :?Principal = ?(Principal.fromActor(this));
+    let res = await canisterUtils.deleteCanister(canisterId);
+  };
+
+  public shared ({caller}) func transferFreezingThresholdCycles() : async () {
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not a manager.");
+    };
+    await walletUtils.transferFreezingThresholdCycles(caller);
+  };
 
 
   public query func version() : async Nat {
 		return VERSION;
 	};  
 }
+
+
+
+
+// public shared func wallet_send(wallet_send: shared () -> async { accepted: Nat }, amount : Nat) : async { accepted: Nat } {// Signature of the wallet recieve function in the calling canister
+//     Cycles.add(amount);
+//     let l = await wallet_send();
+//     { accepted = amount };
+//   };

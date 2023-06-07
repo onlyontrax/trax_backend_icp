@@ -99,16 +99,8 @@ module Types {
         // coverPhoto: ?CoverPhoto;
     };
 
-    public type Role = { // ADD ROLES TO LOGIC 
-      // caller is a fan
-      #fan;
-      // caller is the admin
-      #admin;
-      // caller is artist
-      #artist;
-    };
 
-  public type StatusRequest = {
+    public type StatusRequest = {
         cycles: Bool;
         memory_size: Bool;
         heap_memory_size: Bool;

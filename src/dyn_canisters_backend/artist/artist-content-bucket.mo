@@ -1,40 +1,32 @@
-import Cycles             "mo:base/ExperimentalCycles";
-import Principal          "mo:base/Principal";
-import Error              "mo:base/Error";
-import Nat                "mo:base/Nat";
-import Debug              "mo:base/Debug";
-import Text               "mo:base/Text";
-import T                  "../types";
-import Hash               "mo:base/Hash";
-import Nat32              "mo:base/Nat32";
-import Nat64              "mo:base/Nat64";
-import Iter               "mo:base/Iter";
-import Float              "mo:base/Float";
-import Time               "mo:base/Time";
-import Int                "mo:base/Int";
-import Result             "mo:base/Result";
-import Blob               "mo:base/Blob";
-import Array              "mo:base/Array";
-import Buffer             "mo:base/Buffer";
-import Trie               "mo:base/Trie";
-import TrieMap            "mo:base/TrieMap";
-import CanisterUtils      "../utils/canister.utils";
-import Prim               "mo:⛔";
-import Map                "mo:stable-hash-map/Map";
-import Utils              "../utils/utils";
-import WalletUtils        "../utils/wallet.utils";
-// import Manager "canister:dyn_canisters_backend";
-// import ContentStorageBucket "./artist-bucket";
+import Cycles               "mo:base/ExperimentalCycles";
+import Principal            "mo:base/Principal";
+import Error                "mo:base/Error";
+import Nat                  "mo:base/Nat";
+import Debug                "mo:base/Debug";
+import Text                 "mo:base/Text";
+import T                    "../types";
+import Hash                 "mo:base/Hash";
+import Nat32                "mo:base/Nat32";
+import Nat64                "mo:base/Nat64";
+import Iter                 "mo:base/Iter";
+import Float                "mo:base/Float";
+import Time                 "mo:base/Time";
+import Int                  "mo:base/Int";
+import Result               "mo:base/Result";
+import Blob                 "mo:base/Blob";
+import Array                "mo:base/Array";
+import Buffer               "mo:base/Buffer";
+import Trie                 "mo:base/Trie";
+import TrieMap              "mo:base/TrieMap";
+import CanisterUtils        "../utils/canister.utils";
+import Prim                 "mo:⛔";
+import Map                  "mo:stable-hash-map/Map";
+import Utils                "../utils/utils";
+import WalletUtils          "../utils/wallet.utils";
 
 
 actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
-  // pull cycles from parent canister if balance is below threshold 
-  // most efficient way to check cycles balance: either function call every time data is written into sc, or timer function call to check bal every few hours, or both
-  // 
 
-
-
-//   type ArtistAccountData         = T.ArtistAccountData;
   type UserId                    = T.UserId;
   type ContentInit               = T.ContentInit;
   type ContentId                 = T.ContentId;
@@ -46,20 +38,16 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
   type StatusResponse            = T.StatusResponse;
   type Thumbnail                 = T.Thumbnail;
   type Trailer                   = T.Trailer;
-  // type Manager = Manager.Manager;
   
   let { ihash; nhash; thash; phash; calcHash } = Map;
 
   stable var canisterOwner: Principal = owner;
   stable var managerCanister: Principal = manager;
-  
   stable var MAX_CANISTER_SIZE: Nat =     48_000_000_000; // <-- approx. 48GB
   stable var CYCLE_AMOUNT : Nat     =  1_000_000_000_000; // minimum amount of cycles needed to create new canister 
   let maxCycleAmount                = 20_000_000_000_000; // canister cycles capacity 
   let top_up_amount                 = 10_000_000_000_000;
-  
-  
-  var version: Nat = 1;
+  var VERSION: Nat = 1;
 
   private let canisterUtils : CanisterUtils.CanisterUtils = CanisterUtils.CanisterUtils();
   private let walletUtils : WalletUtils.WalletUtils = WalletUtils.WalletUtils();
@@ -70,11 +58,7 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
   stable var initialised: Bool = false;
   
 
-  public shared({caller})func changeMaxCanisterSize(value: Nat) : (){
-    if (not Utils.isManager(caller)) {
-      throw Error.reject("Unauthorized access. Caller is not the manager. " # Principal.toText(caller));
-    };
-  };
+  
 
 
 // #region - CREATE & UPLOAD CONTENT
@@ -85,26 +69,81 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
     switch (Map.get(content, thash, i.contentId)) {
     case (?_) { throw Error.reject("Content ID already taken")};
     case null { 
-      
-           let a = Map.put(content, thash, i.contentId,
-                            {
-                              contentId = i.contentId;
-                              userId = i.userId;
-                              name = i.name;
-                              createdAt = i.createdAt;
-                              uploadedAt = now;
-                              description =  i.description;
-                              chunkCount = i.chunkCount;
-                              tags = i.tags;
-                              extension = i.extension;
-                              size = i.size;
-                            });
-            await checkCyclesBalance();
-           ?i.contentId
-           
-         };
+       let a = Map.put(content, thash, i.contentId,
+                        {
+                          contentId = i.contentId;
+                          userId = i.userId;
+                          name = i.name;
+                          createdAt = i.createdAt;
+                          uploadedAt = now;
+                          description =  i.description;
+                          chunkCount = i.chunkCount;
+                          tags = i.tags;
+                          extension = i.extension;
+                          size = i.size;
+                        });
+        await checkCyclesBalance();
+       ?i.contentId
+     };
     }
   };
+  
+
+
+  public shared({caller}) func putContentChunk(contentId : ContentId, chunkNum : Nat, chunkData : Blob) : async (){
+      assert(caller == owner or Utils.isManager(caller));
+      let a = Map.put(chunksData, thash, chunkId(contentId, chunkNum), chunkData);
+  };
+
+
+
+  public shared({caller}) func getContentChunk(contentId : ContentId, chunkNum : Nat) : async ?Blob {
+    assert(caller == owner or Utils.isManager(caller));
+    Map.get(chunksData, thash, chunkId(contentId, chunkNum));
+  };
+
+
+
+  private func chunkId(contentId : ContentId, chunkNum : Nat) : ChunkId {
+    contentId # (Nat.toText(chunkNum))
+  };
+
+
+
+  public shared({caller}) func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
+    assert(caller == owner or Utils.isManager(caller));
+    let a = Map.remove(chunksData, thash, chunkId(contentId, chunkNum));
+    let b = Map.remove(content, thash, contentId);
+  };
+
+
+
+  public shared({caller}) func getContentInfo(id: ContentId) : async ?ContentData{
+    assert(caller == owner or Utils.isManager(caller));
+    Map.get(content, thash, id);
+  };
+// #endregion
+
+
+
+  
+
+  
+
+
+
+
+// #region - UTILS
+  public shared({caller}) func checkCyclesBalance () : async(){
+    assert(caller == owner or Utils.isManager(caller));
+    Debug.print("creator of this smart contract: " #debug_show manager);
+    let bal = getCurrentCycles();
+    Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
+    if(bal < CYCLE_AMOUNT){
+       await transferCyclesToThisCanister();
+    };
+  };
+
 
 
   private func transferCyclesToThisCanister() : async (){
@@ -119,51 +158,23 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
 
 
 
-  public shared({caller}) func checkCyclesBalance () : async(){
-    assert(caller == owner or Utils.isManager(caller));
-    Debug.print("creator of this smart contract: " #debug_show manager);
-    let bal = getCurrentCycles();
-    Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
-    if(bal < CYCLE_AMOUNT){
-       await transferCyclesToThisCanister();
+  public shared({caller}) func changeCycleAmount(amount: Nat) : (){
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not the manager. " # Principal.toText(caller));
     };
-  };
-  
-
-
-  public shared({caller}) func putContentChunk(contentId : ContentId, chunkNum : Nat, chunkData : Blob) : async (){
-      assert(caller == owner or Utils.isManager(caller));
-      let a = Map.put(chunksData, thash, chunkId(contentId, chunkNum), chunkData);
+    CYCLE_AMOUNT := amount;
   };
 
 
 
-  private func chunkId(contentId : ContentId, chunkNum : Nat) : ChunkId {
-    contentId # (Nat.toText(chunkNum))
+  public shared({caller}) func changeCanisterSize(newSize: Nat) : (){
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not the manager. " # Principal.toText(caller));
+    };
+    MAX_CANISTER_SIZE := newSize;
   };
 
 
-
-  public shared({caller}) func getContentChunk(contentId : ContentId, chunkNum : Nat) : async ?Blob {
-    assert(caller == owner or Utils.isManager(caller));
-    Map.get(chunksData, thash, chunkId(contentId, chunkNum));
-  };
-
-
-
-  public shared({caller}) func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
-    assert(caller == owner or Utils.isManager(caller));
-    let a = Map.remove(chunksData, thash, chunkId(contentId, chunkNum));
-    let b = Map.remove(content, thash, contentId);
-  };
-// #endregion
-
-
-
-  public shared({caller}) func getContentInfo(id: ContentId) : async ?ContentData{
-    assert(caller == owner or Utils.isManager(caller));
-    Map.get(content, thash, id);
-  };
 
   public shared ({caller}) func transferFreezingThresholdCycles() : async () {
     if (not Utils.isManager(caller)) {
@@ -175,29 +186,39 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
 
 
 
-
-// #region - UTILS
   private func wallet_receive() : async { accepted: Nat64 } {
     let available = Cycles.available();
     let accepted = Cycles.accept(Nat.min(available, top_up_amount));
     { accepted = Nat64.fromNat(accepted) };
   };
 
-  public query func getPrincipalThis() :  async (Principal){
+
+
+  public shared({caller}) func getPrincipalThis() :  async (Principal){
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not a manager.");
+    };
     Principal.fromActor(this);
   };
+
+
 
   private func getCurrentHeapMemory(): Nat {
     Prim.rts_heap_size();
   };
 
+
+
   private func getCurrentMemory(): Nat {
     Prim.rts_memory_size();
   };
 
+
+
   private func getCurrentCycles(): Nat {
     Cycles.balance();
   };
+
 
 
   public func getStatus(request: ?StatusRequest): async ?StatusResponse {
@@ -226,7 +247,10 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
                 };
             };
         };
-    };
+  };
+  public query func version() : async Nat {
+		return VERSION;
+	}; 
 // #endregion
   
 }
