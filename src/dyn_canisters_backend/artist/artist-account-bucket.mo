@@ -61,7 +61,6 @@ import Env "../env";
   stable var VERSION: Nat = 1;
   stable var initialised: Bool = false;
 
-  
   stable var owner: Principal = artistAccount;
 
   private let walletUtils : WalletUtils.WalletUtils = WalletUtils.WalletUtils();
@@ -73,16 +72,19 @@ import Env "../env";
   private let contentCanisterIds = B.init<CanisterId>();
 
 
-  // public query func getCreatorPrincipal() : async (Principal){
-  //   creator;
-  // };
 
 
-  public query func getCanisterOfContent(contentId: ContentId) : async ?(CanisterId){
+
+
+  public shared({caller}) func getCanisterOfContent(contentId: ContentId) : async ?(CanisterId){
+    assert(caller == owner or Utils.isManager(caller));
     Map.get(contentToCanister, thash, contentId);
   };
 
-  public query func getEntriesOfCanisterToContent() : async [(CanisterId, ContentId)]{
+
+
+  public shared({caller}) func getEntriesOfCanisterToContent() : async [(CanisterId, ContentId)]{
+    assert(caller == owner or Utils.isManager(caller));
     var res = Buffer.Buffer<(CanisterId, ContentId)>(2);
     for((key, value) in Map.entries(contentToCanister)){
                 var contentId : ContentId = key;
@@ -94,7 +96,8 @@ import Env "../env";
 
 
 
-  public query func getAllContentCanisters() : async [CanisterId]{
+  public shared({caller}) func getAllContentCanisters() : async [CanisterId]{
+    assert(caller == owner or Utils.isManager(caller));
     B.toArray(contentCanisterIds);
   };
 
@@ -111,7 +114,6 @@ import Env "../env";
         memory_size: Bool = true;
     };
     
-    // let memStatus: ?StatusResponse = await can.getStatus(?request);
     switch(await can.getStatus(?request)){
       case(?status){
         switch(status.memory_size){
@@ -141,8 +143,8 @@ import Env "../env";
 
 
 
-  public func updateProfileInfo(caller: UserId, info: ArtistAccountData) : async (Bool){
-    assert(owner == caller);
+  public shared({caller}) func updateProfileInfo( info: ArtistAccountData) : async (Bool){
+    assert(caller == owner or Utils.isManager(caller));
     switch(Map.get(artistData, phash, caller)){
       case(?exists){
         var update = Map.replace(artistData, phash, caller, info);
@@ -152,37 +154,33 @@ import Env "../env";
   };
 
 
+
   public shared ({caller}) func transferFreezingThresholdCycles() : async () {
     if (not Utils.isManager(caller)) {
       throw Error.reject("Unauthorized access. Caller is not a manager.");
     };
-
     await walletUtils.transferFreezingThresholdCycles(caller);
   };
 
 
 
-  
-
-
-
-  public func getProfileInfo(user: UserId) : async (?ArtistAccountData){
-    // assert(owner == msg.caller);
+  public shared({caller}) func getProfileInfo(user: UserId) : async (?ArtistAccountData){
+    assert(caller == owner or Utils.isManager(caller));
     Map.get(artistData, phash, user);
   };
 
 
 
-
   public shared({caller}) func deleteAccount(user: Principal): async(){
+    assert(caller == owner or Utils.isManager(caller));
     let canisterId :?Principal = ?(Principal.fromActor(this));
     let res = await canisterUtils.deleteCanister(canisterId);
   };
 
 
 
-
-  public func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
+  public shared({caller}) func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
+    assert(caller == owner or Utils.isManager(caller));
     switch(Map.get(contentToCanister, thash, contentId)){
       case(?canID){
         let can = actor(Principal.toText(canID)): actor { 
@@ -197,8 +195,8 @@ import Env "../env";
   
 
 
-  public  func createContent(i : ContentInit) : async ?(ContentId, Principal) {
-    // implement checks: artist-principal or manager identity 
+  public shared({caller}) func createContent(i : ContentInit) : async ?(ContentId, Principal) {
+    assert(caller == owner or Utils.isManager(caller));
 
     var uploaded : Bool = false;
     for(canisters in B.vals(contentCanisterIds)){
@@ -256,6 +254,7 @@ import Env "../env";
   };
 
 
+
   private func createStorageCanister(owner: UserId) : async ?(Principal) {
     await checkCyclesBalance();
     Debug.print(debug_show Principal.toText(owner));
@@ -292,18 +291,9 @@ import Env "../env";
   };
 
 
-  public func transferCyclesToThisCanister() : async (){
-    let self: Principal = Principal.fromActor(this);
-    // Manager.transferCyclesToCanister(self, limit);
 
-    let can = actor(Principal.toText(managerCanister)): actor { 
-            transferCycles: (CanisterId, Nat) -> async ();
-          };
-    let _ = Cycles.accept(top_up_amount);
-    await can.transferCycles(self, top_up_amount);
-  };
-
-  public func checkCyclesBalance () : async(){
+  public shared({caller}) func checkCyclesBalance () : async(){
+    assert(caller == owner or Utils.isManager(caller));
     Debug.print("creator of this smart contract: " #debug_show managerCanister);
     let bal = getCurrentCycles();
     Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
@@ -313,82 +303,78 @@ import Env "../env";
   };
 
 
-  public func changeCycleAmount(amount: Nat) : (){
+
+  private func transferCyclesToThisCanister() : async (){
+    let self: Principal = Principal.fromActor(this);
+    let can = actor(Principal.toText(managerCanister)): actor { 
+      transferCycles: (CanisterId, Nat) -> async ();
+    };
+    let accepted = await wallet_receive();
+    await can.transferCycles(self, Nat64.toNat(accepted.accepted));
+  };
+
+
+
+  public shared({caller}) func changeCycleAmount(amount: Nat) : (){
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not the manager. " # Principal.toText(caller));
+    };
     CYCLE_AMOUNT := amount;
   };
 
-  public func changeCanisterSize(newSize: Nat) : (){
+
+
+  public shared({caller}) func changeCanisterSize(newSize: Nat) : (){
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not the manager. " # Principal.toText(caller));
+    };
     MAX_CANISTER_SIZE := newSize;
   };
 
-  // public func getMemoryStatus() : async (Nat, Nat){
-  //   let memSize = Prim.rts_memory_size();
-  //   let heapSize = Prim.rts_heap_size();
-  //   return (memSize, heapSize);
-  // }; 
 
-  
-
-  func chunkId(contentId : ContentId, chunkNum : Nat) : ChunkId {
-    contentId # (Nat.toText(chunkNum))
-  };
-
-  // public shared(msg) func putContentChunk(contentId : ContentId, chunkNum : Nat, chunkData : [Nat8]) : async ?()
-  // {
-  //   do ? {
-  //     // accessCheck(msg.caller, #update, #video videoId)!;
-  //     contentData.chunksPut(chunkId(contentId, chunkNum), chunkData);
-  //   }
-  // };
-
-  // public func getContentChunk(contentId : ContentId, chunkNum : Nat) : async ?[Nat8] {
-  //   do ? {
-  //     // accessCheck(msg.caller, #view, #video videoId)!;
-  //     contentData.chunksGet(chunkId(contentId, chunkNum))!
-  //   }
-  // };
 
   private func getCurrentHeapMemory(): Nat {
     Prim.rts_heap_size();
   };
 
+
+
   private func getCurrentMemory(): Nat {
     Prim.rts_memory_size();
   };
+
+
 
   private func getCurrentCycles(): Nat {
     Cycles.balance();
   };
 
 
+
   public func getStatus(request: ?StatusRequest): async ?StatusResponse {
-        switch(request) {
-            case (null) {
-                return null;
-            };
-            case (?_request) {
-                var cycles: ?Nat = null;
-                if (_request.cycles) {
-                    cycles := ?getCurrentCycles();
-                };
-                var memory_size: ?Nat = null;
-                if (_request.memory_size) {
-                    memory_size := ?getCurrentMemory();
-                };
-
-                var heap_memory_size: ?Nat = null;
-                if (_request.heap_memory_size) {
-                    heap_memory_size := ?getCurrentHeapMemory();
-                };
-                return ?{
-                    cycles = cycles;
-                    memory_size = memory_size;
-                    heap_memory_size = heap_memory_size;
-                };
-            };
-        };
+    switch(request) {
+      case (?_request) {
+          var cycles: ?Nat = null;
+          if (_request.cycles) {
+              cycles := ?getCurrentCycles();
+          };
+          var memory_size: ?Nat = null;
+          if (_request.memory_size) {
+              memory_size := ?getCurrentMemory();
+          };
+          var heap_memory_size: ?Nat = null;
+          if (_request.heap_memory_size) {
+              heap_memory_size := ?getCurrentHeapMemory();
+          };
+          return ?{
+              cycles = cycles;
+              memory_size = memory_size;
+              heap_memory_size = heap_memory_size;
+          };
+      };
+      case null return null;
     };
-
+  };
 
 
 
@@ -398,6 +384,8 @@ import Env "../env";
     { accepted = Nat64.fromNat(accepted) };
   };
 
+
+
   public shared func wallet_send(wallet_send: shared () -> async { accepted: Nat }, amount : Nat) : async { accepted: Nat } {// Signature of the wallet recieve function in the calling canister
     Cycles.add(amount);
     let l = await wallet_send();
@@ -405,21 +393,14 @@ import Env "../env";
   };
 
 
+
   public query func getPrincipalThis() :  async (Principal){
     Principal.fromActor(this);
   };
 
+
+
   public query func version() : async Nat {
 		return VERSION;
-	};
-
-  // public shared({caller}) func cyclesBalance() : async (Nat) {
-  //   if (not Utils.isAdmin(caller)) {
-  //     throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
-  //   };
-
-  //   return walletUtils.cyclesBalance();
-  // };
-
-  
+	};  
 }

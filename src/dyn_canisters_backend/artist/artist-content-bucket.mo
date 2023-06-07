@@ -52,12 +52,14 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
 
   stable var canisterOwner: Principal = owner;
   stable var managerCanister: Principal = manager;
-  stable var MAX_CANISTER_SIZE: Nat = 48_000_000_000; // <-- approx. 48GB
+  
+  stable var MAX_CANISTER_SIZE: Nat =     48_000_000_000; // <-- approx. 48GB
+  stable var CYCLE_AMOUNT : Nat     =  1_000_000_000_000; // minimum amount of cycles needed to create new canister 
+  let maxCycleAmount                = 20_000_000_000_000; // canister cycles capacity 
+  let top_up_amount                 = 10_000_000_000_000;
+  
+  
   var version: Nat = 1;
-
-
-  let limit                         = 20_000_000_000_000; // canister cycles capacity 
-  stable var CYCLE_AMOUNT : Nat     =  100_000_000_000; // minimum amount of cycles needed to create new canister 
 
   private let canisterUtils : CanisterUtils.CanisterUtils = CanisterUtils.CanisterUtils();
   private let walletUtils : WalletUtils.WalletUtils = WalletUtils.WalletUtils();
@@ -66,19 +68,18 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
   private var chunksData = Map.new<ChunkId, ChunkData>(thash);
 
   stable var initialised: Bool = false;
-
   
 
   public shared({caller})func changeMaxCanisterSize(value: Nat) : (){
-    if (not Utils.isAdmin(caller)) {
-      throw Error.reject("Unauthorized access. Caller is not an admin. " # Principal.toText(caller));
+    if (not Utils.isManager(caller)) {
+      throw Error.reject("Unauthorized access. Caller is not the manager. " # Principal.toText(caller));
     };
   };
 
 
 // #region - CREATE & UPLOAD CONTENT
-  public func createContent(i : ContentInit) : async ?ContentId {
-    
+  public shared({caller}) func createContent(i : ContentInit) : async ?ContentId {
+    assert(caller == owner or Utils.isManager(caller));
     let now = Time.now();
     // let videoId = Principal.toText(i.userId) # "-" # i.name # "-" # (Int.toText(now));
     switch (Map.get(content, thash, i.contentId)) {
@@ -98,7 +99,7 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
                               extension = i.extension;
                               size = i.size;
                             });
-            // await checkCyclesBalance();
+            await checkCyclesBalance();
            ?i.contentId
            
          };
@@ -106,18 +107,20 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
   };
 
 
-  public func transferCyclesToThisCanister() : async (){
+  private func transferCyclesToThisCanister() : async (){
     let self: Principal = Principal.fromActor(this);
-    // Manager.transferCyclesToCanister(self, limit);
 
     let can = actor(Principal.toText(managerCanister)): actor { 
-            transferCycles: (CanisterId, Nat) -> async ();
-          };
-    
-    await can.transferCycles(self, limit);
+      transferCycles: (CanisterId, Nat) -> async ();
+    };
+    let accepted = await wallet_receive();
+    await can.transferCycles(self, Nat64.toNat(accepted.accepted));
   };
 
-  public func checkCyclesBalance () : async(){
+
+
+  public shared({caller}) func checkCyclesBalance () : async(){
+    assert(caller == owner or Utils.isManager(caller));
     Debug.print("creator of this smart contract: " #debug_show manager);
     let bal = getCurrentCycles();
     Debug.print("Cycles Balance After Canister Creation: " #debug_show bal);
@@ -125,29 +128,31 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
        await transferCyclesToThisCanister();
     };
   };
-
   
 
-  
 
-  public shared(msg) func putContentChunk(contentId : ContentId, chunkNum : Nat, chunkData : Blob) : async (){
-      // accessCheck(msg.caller, #update, #video videoId)!;
-      // await checkCyclesBalance();
+  public shared({caller}) func putContentChunk(contentId : ContentId, chunkNum : Nat, chunkData : Blob) : async (){
+      assert(caller == owner or Utils.isManager(caller));
       let a = Map.put(chunksData, thash, chunkId(contentId, chunkNum), chunkData);
   };
 
 
-  func chunkId(contentId : ContentId, chunkNum : Nat) : ChunkId {
+
+  private func chunkId(contentId : ContentId, chunkNum : Nat) : ChunkId {
     contentId # (Nat.toText(chunkNum))
   };
 
 
-  public func getContentChunk(contentId : ContentId, chunkNum : Nat) : async ?Blob {
-    // await checkCyclesBalance();
-      Map.get(chunksData, thash, chunkId(contentId, chunkNum));
+
+  public shared({caller}) func getContentChunk(contentId : ContentId, chunkNum : Nat) : async ?Blob {
+    assert(caller == owner or Utils.isManager(caller));
+    Map.get(chunksData, thash, chunkId(contentId, chunkNum));
   };
 
-  public func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
+
+
+  public shared({caller}) func removeContent(contentId: ContentId, chunkNum : Nat) : async () {
+    assert(caller == owner or Utils.isManager(caller));
     let a = Map.remove(chunksData, thash, chunkId(contentId, chunkNum));
     let b = Map.remove(content, thash, contentId);
   };
@@ -155,25 +160,10 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
 
 
 
-  public func getContentInfo(caller: UserId, id: ContentId) : async ?ContentData{
-    // await checkCyclesBalance();
+  public shared({caller}) func getContentInfo(id: ContentId) : async ?ContentData{
+    assert(caller == owner or Utils.isManager(caller));
     Map.get(content, thash, id);
   };
-
-
-  // public query func is_full() : async Bool {
-	// 	let MAX_SIZE_THRESHOLD_MB : Float = 1500;
-
-	// 	let rts_memory_size : Nat = Prim.rts_memory_size();
-	// 	let mem_size : Float = Float.fromInt(rts_memory_size);
-	// 	let memory_in_megabytes = Float.abs(mem_size * 0.000001);
-
-	// 	if (memory_in_megabytes > MAX_SIZE_THRESHOLD_MB) {
-	// 		return true;
-	// 	} else {
-	// 		return false;
-	// 	};
-	// };
 
   public shared ({caller}) func transferFreezingThresholdCycles() : async () {
     if (not Utils.isManager(caller)) {
@@ -187,6 +177,12 @@ actor class ArtistContentBucket(owner: Principal, manager: Principal) = this {
 
 
 // #region - UTILS
+  private func wallet_receive() : async { accepted: Nat64 } {
+    let available = Cycles.available();
+    let accepted = Cycles.accept(Nat.min(available, top_up_amount));
+    { accepted = Nat64.fromNat(accepted) };
+  };
+
   public query func getPrincipalThis() :  async (Principal){
     Principal.fromActor(this);
   };
